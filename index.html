@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Add Watermark</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1f6feb">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Add Watermark</h1>
+</header>
+
+<main>
+
+  <!-- STEP 1: Template Library -->
+  <section class="card" id="templateSection">
+    <div class="card-header">
+      <h2>1. Templates</h2>
+      <button id="uploadBtn" class="btn btn-small">+ Upload</button>
+      <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" multiple hidden>
+    </div>
+    <div id="templateList" class="template-list">
+      <p class="empty-hint">No templates yet. Tap "+ Upload" to add PDF or image templates. They'll stay saved on this device.</p>
+    </div>
+  </section>
+
+  <!-- STEP 2: Inputs -->
+  <section class="card">
+    <h2>2. Watermark Text</h2>
+    <div class="field-row">
+      <input type="text" id="label1" class="field-label" value="ชื่อร้าน/บริษัท">
+      <input type="text" id="value1" class="field-value" placeholder="ค่า">
+    </div>
+    <div class="field-row">
+      <input type="text" id="label2" class="field-label" value="เลขที่ใบอนุญาต">
+      <input type="text" id="value2" class="field-value" placeholder="ค่า">
+    </div>
+    <div class="field-row">
+      <input type="text" id="label3" class="field-label" value="เลขที่ใบเสร็จรับเงิน">
+      <input type="text" id="value3" class="field-value" placeholder="ค่า">
+    </div>
+    <div class="field-row">
+      <input type="text" id="label4" class="field-label" value="สั่งซื้อวันที่">
+      <input type="date" id="dateValue" class="field-value">
+    </div>
+  </section>
+
+  <!-- STEP 3: Settings -->
+  <section class="card">
+    <h2>3. Settings</h2>
+
+    <div class="slider-row">
+      <label for="columns">Columns <span id="columnsOut">3</span></label>
+      <input type="range" id="columns" min="1" max="8" value="3">
+    </div>
+
+    <div class="slider-row">
+      <label for="padding">Padding (%) <span id="paddingOut">15</span></label>
+      <input type="range" id="padding" min="0" max="60" value="15">
+    </div>
+
+    <div class="slider-row">
+      <label for="angle">Angle (°) <span id="angleOut">45</span></label>
+      <input type="range" id="angle" min="0" max="90" value="45">
+    </div>
+
+    <div class="slider-row">
+      <label for="opacity">Opacity (%) <span id="opacityOut">20</span></label>
+      <input type="range" id="opacity" min="5" max="100" value="20">
+    </div>
+
+    <div class="toggle-row">
+      <label>Style</label>
+      <div class="segmented" id="styleToggle">
+        <button data-style="light" class="seg-btn active">Light</button>
+        <button data-style="dark" class="seg-btn">Dark</button>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label for="outputFormat">Output</label>
+      <select id="outputFormat">
+        <option value="pdf">PDF</option>
+        <option value="jpg">JPG</option>
+      </select>
+    </div>
+  </section>
+
+  <!-- STEP 4: Preview -->
+  <section class="card">
+    <h2>4. Preview</h2>
+    <div id="previewWrap" class="preview-wrap">
+      <canvas id="previewCanvas"></canvas>
+      <p id="previewHint" class="empty-hint">Select a template above, then tap Preview.</p>
+    </div>
+  </section>
+
+  <!-- Actions -->
+  <div class="action-bar">
+    <button id="previewBtn" class="btn btn-secondary">Preview</button>
+    <button id="createBtn" class="btn btn-primary">Create File(s)</button>
+  </div>
+
+  <p id="statusLine" class="status-line"></p>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+</script>
+<script src="js/db.js"></script>
+<script src="js/pdfHandler.js"></script>
+<script src="js/watermark.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
