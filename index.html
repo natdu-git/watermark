@@ -17,106 +17,142 @@
 
 <main>
 
-  <!-- STEP 1: Template Library -->
-  <section class="card" id="templateSection">
+<!-- ============ CREATE PAGE ============ -->
+<div id="pageCreate" class="page active">
+
+  <section class="card">
     <div class="card-header">
-      <h2>1. Templates</h2>
+      <h2>Templates</h2>
+      <span class="hint-link" data-nav="setup">Manage in Setup</span>
+    </div>
+    <div id="templatePicker" class="template-list">
+      <p class="empty-hint">No templates yet. Go to Setup to upload some.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Customer</h2>
+    <div class="search-wrap">
+      <input type="text" id="customerSearch" placeholder="ค้นหาลูกค้า หรือพิมพ์ชื่อใหม่">
+      <div id="customerSuggestions" class="suggestions"></div>
+    </div>
+    <div id="newCustomerRow" class="new-customer-row">
+      <input type="text" id="newLicenseInput" class="field-value" placeholder="เลขที่ใบอนุญาต">
+      <button id="saveNewCustomerBtn" class="btn btn-small">Save customer</button>
+    </div>
+    <p id="customerError" class="error-line"></p>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <h2>Watermark Text</h2>
+      <button id="defaultLinesBtn" class="btn btn-small btn-ghost">Default</button>
+    </div>
+    <div id="linesContainer"></div>
+    <button id="addLineBtn" class="btn btn-secondary btn-full">+ Add line</button>
+  </section>
+
+  <!-- Preview + Settings unit: preview on top, live-updating settings below -->
+  <section class="card preview-settings-unit">
+    <div id="previewWrap" class="preview-wrap">
+      <canvas id="previewCanvas"></canvas>
+      <p id="previewHint" class="empty-hint">Select a template to see a live preview.</p>
+    </div>
+
+    <div class="compact-settings">
+      <div class="compact-row">
+        <span class="compact-label">Columns <b id="columnsOut">3</b></span>
+        <input type="range" id="columns" min="1" max="8" value="3">
+      </div>
+      <div class="compact-row">
+        <span class="compact-label">Padding <b id="paddingOut">15</b>%</span>
+        <input type="range" id="padding" min="0" max="60" value="15">
+      </div>
+      <div class="compact-row">
+        <span class="compact-label">Angle <b id="angleOut">45</b>°</span>
+        <input type="range" id="angle" min="0" max="90" value="45">
+      </div>
+      <div class="compact-row">
+        <span class="compact-label">Opacity <b id="opacityOut">20</b>%</span>
+        <input type="range" id="opacity" min="5" max="100" value="20">
+      </div>
+      <div class="compact-row">
+        <span class="compact-label">Style</span>
+        <div class="segmented" id="styleToggle">
+          <button data-style="light" class="seg-btn active">Light</button>
+          <button data-style="dark" class="seg-btn">Dark</button>
+        </div>
+      </div>
+      <div class="compact-row">
+        <span class="compact-label">Output</span>
+        <select id="outputFormat">
+          <option value="pdf">PDF</option>
+          <option value="jpg">JPG</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <div class="action-bar">
+    <button id="createBtn" class="btn btn-primary">Create File(s)</button>
+  </div>
+
+  <p id="statusLine" class="status-line"></p>
+</div>
+
+<!-- ============ SETUP PAGE ============ -->
+<div id="pageSetup" class="page">
+
+  <section class="card">
+    <div class="card-header">
+      <h2>Templates</h2>
       <button id="uploadBtn" class="btn btn-small">+ Upload</button>
-      <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" multiple hidden>
+      <input type="file" id="fileInput" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple hidden>
     </div>
     <div id="templateList" class="template-list">
       <p class="empty-hint">No templates yet. Tap "+ Upload" to add PDF or image templates. They'll stay saved on this device.</p>
     </div>
   </section>
 
-  <!-- STEP 2: Inputs -->
   <section class="card">
-    <h2>2. Watermark Text</h2>
-    <div class="field-row">
-      <input type="text" id="label1" class="field-label" value="ชื่อร้าน/บริษัท">
-      <input type="text" id="value1" class="field-value" placeholder="ค่า">
-    </div>
-    <div class="field-row">
-      <input type="text" id="label2" class="field-label" value="เลขที่ใบอนุญาต">
-      <input type="text" id="value2" class="field-value" placeholder="ค่า">
-    </div>
-    <div class="field-row">
-      <input type="text" id="label3" class="field-label" value="เลขที่ใบเสร็จรับเงิน">
-      <input type="text" id="value3" class="field-value" placeholder="ค่า">
-    </div>
-    <div class="field-row">
-      <input type="text" id="label4" class="field-label" value="สั่งซื้อวันที่">
-      <input type="date" id="dateValue" class="field-value">
-    </div>
-  </section>
-
-  <!-- STEP 3: Settings -->
-  <section class="card">
-    <h2>3. Settings</h2>
-
-    <div class="slider-row">
-      <label for="columns">Columns <span id="columnsOut">3</span></label>
-      <input type="range" id="columns" min="1" max="8" value="3">
-    </div>
-
-    <div class="slider-row">
-      <label for="padding">Padding (%) <span id="paddingOut">15</span></label>
-      <input type="range" id="padding" min="0" max="60" value="15">
-    </div>
-
-    <div class="slider-row">
-      <label for="angle">Angle (°) <span id="angleOut">45</span></label>
-      <input type="range" id="angle" min="0" max="90" value="45">
-    </div>
-
-    <div class="slider-row">
-      <label for="opacity">Opacity (%) <span id="opacityOut">20</span></label>
-      <input type="range" id="opacity" min="5" max="100" value="20">
-    </div>
-
-    <div class="toggle-row">
-      <label>Style</label>
-      <div class="segmented" id="styleToggle">
-        <button data-style="light" class="seg-btn active">Light</button>
-        <button data-style="dark" class="seg-btn">Dark</button>
+    <div class="card-header">
+      <h2>Customers</h2>
+      <div class="header-actions">
+        <button id="downloadTemplateBtn" class="btn btn-small">Template</button>
+        <button id="bulkUploadBtn" class="btn btn-small">Bulk upload</button>
+        <input type="file" id="bulkFileInput" accept=".csv,.xlsx,.xls" hidden>
       </div>
     </div>
-
-    <div class="toggle-row">
-      <label for="outputFormat">Output</label>
-      <select id="outputFormat">
-        <option value="pdf">PDF</option>
-        <option value="jpg">JPG</option>
-      </select>
+    <input type="text" id="customerListSearch" placeholder="Search customers" class="field-value" style="margin-bottom:10px">
+    <div id="customerImportSummary" class="import-summary" style="display:none"></div>
+    <div id="conflictReview" class="conflict-review" style="display:none"></div>
+    <div id="customerList" class="customer-list">
+      <p class="empty-hint">No customers saved yet.</p>
     </div>
   </section>
 
-  <!-- STEP 4: Preview -->
-  <section class="card">
-    <h2>4. Preview</h2>
-    <div id="previewWrap" class="preview-wrap">
-      <canvas id="previewCanvas"></canvas>
-      <p id="previewHint" class="empty-hint">Select a template above, then tap Preview.</p>
-    </div>
-  </section>
-
-  <!-- Actions -->
-  <div class="action-bar">
-    <button id="previewBtn" class="btn btn-secondary">Preview</button>
-    <button id="createBtn" class="btn btn-primary">Create File(s)</button>
-  </div>
-
-  <p id="statusLine" class="status-line"></p>
+</div>
 
 </main>
+
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-nav="create">
+    <span class="nav-icon">🖼️</span><span>Create</span>
+  </button>
+  <button class="nav-btn" data-nav="setup">
+    <span class="nav-icon">⚙️</span><span>Setup</span>
+  </button>
+</nav>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
   pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 </script>
 <script src="js/db.js"></script>
+<script src="js/customerImport.js"></script>
 <script src="js/pdfHandler.js"></script>
 <script src="js/watermark.js"></script>
 <script src="js/app.js"></script>
