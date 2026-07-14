@@ -1,0 +1,9 @@
+{
+  "name": "Add Watermark",
+  "short_name": "Watermark",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f4f5f7",
+  "theme_color": "#1f6feb",
+  "icons": []
+}

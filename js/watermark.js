@@ -1,0 +1,165 @@
+// Ported from the desktop app's watermark_image_as_overlay (PyMuPDF/Pillow) to
+// canvas 2D. Produces a new canvas with the tiled, rotated watermark composited
+// over the source template.
+const Watermark = (() => {
+
+  const FONT_FAMILY = "Noto Sans Thai";
+
+  const STYLE_PRESETS = {
+    light: { text: "rgba(50,50,50,1)", bg: "255,255,255", bgAlpha: 51 / 255, border: "rgba(153,153,153,1)" },
+    dark:  { text: "rgba(240,240,240,1)", bg: "0,0,0", bgAlpha: 90 / 255, border: "rgba(200,200,200,1)" }
+  };
+
+  async function ensureFontLoaded(size) {
+    try {
+      await document.fonts.load(`${size}px "${FONT_FAMILY}"`);
+      await document.fonts.ready;
+    } catch (e) { /* fall back silently to system font */ }
+  }
+
+  function splitLines(text) {
+    return text.split("\n");
+  }
+
+  function measureMultiline(ctx, lines, font, lineSpacingRatio = 0.2) {
+    ctx.font = font;
+    let maxWidth = 0;
+    for (const line of lines) {
+      const w = ctx.measureText(line).width;
+      if (w > maxWidth) maxWidth = w;
+    }
+    const fontSize = parseInt(font, 10);
+    const lineHeight = fontSize * (1 + lineSpacingRatio);
+    const totalHeight = lineHeight * lines.length;
+    return { width: maxWidth, height: totalHeight, lineHeight };
+  }
+
+  function drawMultilineCentered(ctx, lines, font, color, cx, cy, lineHeight) {
+    ctx.font = font;
+    ctx.fillStyle = color;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const totalHeight = lineHeight * lines.length;
+    let y = cy - totalHeight / 2 + lineHeight / 2;
+    for (const line of lines) {
+      ctx.fillText(line, cx, y);
+      y += lineHeight;
+    }
+  }
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // sourceCanvas: canvas with the base template already drawn (RGB)
+  // opts: { text, columns, paddingRatio, angleDeg, opacity, style }
+  async function apply(sourceCanvas, opts) {
+    const { text, columns, paddingRatio, angleDeg, opacity, style } = opts;
+    const W = sourceCanvas.width;
+    const H = sourceCanvas.height;
+    const preset = STYLE_PRESETS[style] || STYLE_PRESETS.light;
+
+    const totalColumnRatio = columns * (1 + paddingRatio);
+    const targetBoxWidth = totalColumnRatio > 0 ? W / totalColumnRatio : W;
+
+    const measureCanvas = document.createElement("canvas");
+    const mctx = measureCanvas.getContext("2d");
+
+    // Step 1: estimate font size against a placeholder string sized to columns.
+    const testFontSize = 30;
+    await ensureFontLoaded(testFontSize);
+    const lines = splitLines(text);
+    const testLines = lines.map(l => {
+      const idx = l.indexOf(":");
+      const label = idx >= 0 ? l.slice(0, idx + 1) : l;
+      return `${label} XXXXXXXXXXXXXXX`;
+    });
+    const testFont = `${testFontSize}px "${FONT_FAMILY}"`;
+    const testMeasure = measureMultiline(mctx, testLines, testFont);
+    const testBoxW = testMeasure.width + testFontSize;
+    const ratio = testBoxW > 0 ? targetBoxWidth / testBoxW : 1;
+    const fontSize = Math.max(8, Math.round(testFontSize * ratio));
+
+    // Step 2: measure actual text at computed font size.
+    await ensureFontLoaded(fontSize);
+    const font = `${fontSize}px "${FONT_FAMILY}"`;
+    const measure = measureMultiline(mctx, lines, font);
+
+    const padding = fontSize;
+    const boxWidth = Math.ceil(measure.width + padding);
+    const boxHeight = Math.ceil(measure.height + padding);
+
+    // Step 3: draw one tile (rounded rect bg + border + centered text).
+    const tileCanvas = document.createElement("canvas");
+    tileCanvas.width = boxWidth;
+    tileCanvas.height = boxHeight;
+    const tctx = tileCanvas.getContext("2d");
+    tctx.save();
+    roundRectPath(tctx, 1, 1, boxWidth - 2, boxHeight - 2, 10);
+    tctx.fillStyle = `rgba(${preset.bg},${preset.bgAlpha})`;
+    tctx.fill();
+    tctx.lineWidth = 2;
+    tctx.strokeStyle = preset.border;
+    tctx.stroke();
+    tctx.restore();
+    drawMultilineCentered(tctx, lines, font, preset.text, boxWidth / 2, boxHeight / 2, measure.lineHeight);
+
+    // Step 4: tile across a canvas big enough to cover the rotated bounds.
+    const angleRad = angleDeg * Math.PI / 180;
+    const cosA = Math.abs(Math.cos(angleRad));
+    const sinA = Math.abs(Math.sin(angleRad));
+    const tilingW = Math.ceil(W * cosA + H * sinA);
+    const tilingH = Math.ceil(H * cosA + W * sinA);
+
+    const tilingCanvas = document.createElement("canvas");
+    tilingCanvas.width = tilingW;
+    tilingCanvas.height = tilingH;
+    const tilCtx = tilingCanvas.getContext("2d");
+
+    const uniformPadding = Math.round(boxWidth * paddingRatio);
+    const stepX = boxWidth + uniformPadding;
+    const stepY = boxHeight + uniformPadding;
+
+    for (let y = 0; y < tilingH; y += stepY) {
+      for (let x = 0; x < tilingW; x += stepX) {
+        tilCtx.drawImage(tileCanvas, x, y);
+      }
+    }
+
+    // Step 5: rotate the tiled canvas (expand-to-fit, like PIL's rotate(expand=True)).
+    const rotBoundW = Math.ceil(tilingW * cosA + tilingH * sinA);
+    const rotBoundH = Math.ceil(tilingH * cosA + tilingW * sinA);
+    const rotatedCanvas = document.createElement("canvas");
+    rotatedCanvas.width = rotBoundW;
+    rotatedCanvas.height = rotBoundH;
+    const rotCtx = rotatedCanvas.getContext("2d");
+    rotCtx.translate(rotBoundW / 2, rotBoundH / 2);
+    rotCtx.rotate(angleRad);
+    rotCtx.drawImage(tilingCanvas, -tilingW / 2, -tilingH / 2);
+
+    // Step 6: composite the rotated overlay, centered, over the source at the
+    // requested opacity.
+    const outCanvas = document.createElement("canvas");
+    outCanvas.width = W;
+    outCanvas.height = H;
+    const outCtx = outCanvas.getContext("2d");
+    outCtx.drawImage(sourceCanvas, 0, 0);
+
+    const pasteX = (W - rotBoundW) / 2;
+    const pasteY = (H - rotBoundH) / 2;
+    outCtx.save();
+    outCtx.globalAlpha = opacity;
+    outCtx.drawImage(rotatedCanvas, pasteX, pasteY);
+    outCtx.restore();
+
+    return outCanvas;
+  }
+
+  return { apply, STYLE_PRESETS };
+})();
