@@ -49,34 +49,30 @@
 
     <div class="compact-settings">
       <div class="compact-row">
+        <span class="compact-label">Columns</span>
         <span class="compact-value" id="columnsOut">3</span>
         <input type="range" id="columns" min="1" max="8" value="3">
-        <span class="compact-label">Columns</span>
       </div>
       <div class="compact-row">
+        <span class="compact-label">Padding</span>
         <span class="compact-value"><span id="paddingOut">15</span>%</span>
         <input type="range" id="padding" min="0" max="60" value="15">
-        <span class="compact-label">Padding</span>
       </div>
       <div class="compact-row">
+        <span class="compact-label">Angle</span>
         <span class="compact-value"><span id="angleOut">45</span>°</span>
         <input type="range" id="angle" min="0" max="90" value="45">
-        <span class="compact-label">Angle</span>
       </div>
       <div class="compact-row">
+        <span class="compact-label">Opacity</span>
         <span class="compact-value"><span id="opacityOut">20</span>%</span>
         <input type="range" id="opacity" min="5" max="100" value="20">
-        <span class="compact-label">Opacity</span>
       </div>
-      <div class="compact-row">
-        <span class="compact-label" style="width:auto">Style</span>
-        <div class="segmented" id="styleToggle">
-          <button data-style="light" class="seg-btn active">Light</button>
-          <button data-style="dark" class="seg-btn">Dark</button>
+      <div class="compact-row style-output-row">
+        <div class="icon-toggle" id="styleToggle">
+          <button data-style="light" class="icon-seg active" title="Light" aria-label="Light">☀</button>
+          <button data-style="dark" class="icon-seg" title="Dark" aria-label="Dark">☾</button>
         </div>
-      </div>
-      <div class="compact-row">
-        <span class="compact-label" style="width:auto">Output</span>
         <select id="outputFormat">
           <option value="pdf">PDF</option>
           <option value="jpg">JPG</option>
@@ -100,7 +96,7 @@
     <div class="card-header">
       <h2>Templates</h2>
       <button id="uploadBtn" class="btn btn-small">+ Upload</button>
-      <input type="file" id="fileInput" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple hidden>
+      <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" multiple hidden>
     </div>
     <div id="templateList" class="template-row">
       <p class="empty-hint">No templates yet. Tap "+ Upload" to add PDF or image templates. They'll stay saved on this device.</p>
@@ -184,6 +180,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
   pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";

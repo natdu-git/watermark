@@ -123,9 +123,10 @@
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
     for (const file of files) {
+      const isPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
       await TemplateDB.addTemplate({
         name: file.name,
-        type: /\.pdf$/i.test(file.name) ? "pdf" : "image",
+        type: isPdf ? "pdf" : "image",
         blob: file
       });
     }
@@ -174,15 +175,20 @@
       const row = document.createElement("div");
       row.className = "line-row";
 
-      const titleRow = document.createElement("div");
-      titleRow.className = "line-title-row";
-
       const labelInput = document.createElement("input");
       labelInput.className = "line-label";
       labelInput.value = line.label;
-      labelInput.placeholder = "Label";
       labelInput.addEventListener("input", () => { line.label = labelInput.value; schedulePreview(); });
-      titleRow.appendChild(labelInput);
+      row.appendChild(labelInput);
+
+      const valueInput = document.createElement("input");
+      valueInput.className = "line-value";
+      valueInput.type = line.type === "date" ? "date" : "text";
+      valueInput.value = line.value;
+      valueInput.addEventListener("input", () => { line.value = valueInput.value; schedulePreview(); });
+      if (line.role === "shop") line.shopInputRef = valueInput;
+      if (line.role === "license") line.licenseInputRef = valueInput;
+      row.appendChild(valueInput);
 
       if (line.role === "shop" || line.role === "license") {
         const searchBtn = document.createElement("button");
@@ -190,7 +196,7 @@
         searchBtn.textContent = "\u{1F50D}";
         searchBtn.title = "Search customers";
         searchBtn.addEventListener("click", () => openCustomerSearch());
-        titleRow.appendChild(searchBtn);
+        row.appendChild(searchBtn);
       }
 
       const delBtn = document.createElement("button");
@@ -203,19 +209,8 @@
         renderLines();
         schedulePreview();
       });
-      titleRow.appendChild(delBtn);
+      row.appendChild(delBtn);
 
-      const valueInput = document.createElement("input");
-      valueInput.className = "line-value";
-      valueInput.type = line.type === "date" ? "date" : "text";
-      valueInput.value = line.value;
-      valueInput.placeholder = "Value";
-      valueInput.addEventListener("input", () => { line.value = valueInput.value; schedulePreview(); });
-      if (line.role === "shop") line.shopInputRef = valueInput;
-      if (line.role === "license") line.licenseInputRef = valueInput;
-
-      row.appendChild(titleRow);
-      row.appendChild(valueInput);
       container.appendChild(row);
     });
   }
@@ -434,9 +429,9 @@
       slider.addEventListener("input", () => { out.textContent = slider.value; schedulePreview(); });
     });
 
-  document.querySelectorAll("#styleToggle .seg-btn").forEach((btn) => {
+  document.querySelectorAll("#styleToggle .icon-seg").forEach((btn) => {
     btn.addEventListener("click", () => {
-      document.querySelectorAll("#styleToggle .seg-btn").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll("#styleToggle .icon-seg").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
       state.currentStyle = btn.dataset.style;
       schedulePreview();
@@ -458,8 +453,8 @@
     el("padding").value = 15; el("paddingOut").textContent = "15";
     el("angle").value = 45; el("angleOut").textContent = "45";
     el("opacity").value = 20; el("opacityOut").textContent = "20";
-    document.querySelectorAll("#styleToggle .seg-btn").forEach(b => b.classList.remove("active"));
-    document.querySelector('#styleToggle .seg-btn[data-style="light"]').classList.add("active");
+    document.querySelectorAll("#styleToggle .icon-seg").forEach(b => b.classList.remove("active"));
+    document.querySelector('#styleToggle .icon-seg[data-style="light"]').classList.add("active");
     state.currentStyle = "light";
     el("outputFormat").value = "pdf";
   }
@@ -574,9 +569,21 @@
       for (let i = 0; i < selected.length; i++) {
         const tpl = selected[i];
         setStatus(`Processing ${i + 1}/${selected.length}: ${tpl.name}`);
-        const srcCanvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 300);
-        const result = await Watermark.apply(srcCanvas, { text, ...settings });
-        const blob = await PdfHandler.canvasToBlob(result, format);
+        let blob;
+        if (format === "pdf" && tpl.type === "pdf") {
+          // Vector path: overlay watermark on the original PDF, keeping page
+          // content selectable/crisp. Fall back to raster on any error.
+          try {
+            blob = await PdfHandler.overlayOnPdf(tpl.blob, { text, ...settings });
+          } catch (e) {
+            console.warn("Vector overlay failed, falling back to raster:", e);
+          }
+        }
+        if (!blob) {
+          const srcCanvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 300);
+          const result = await Watermark.apply(srcCanvas, { text, ...settings });
+          blob = await PdfHandler.canvasToBlob(result, format);
+        }
         const suffix = selected.length > 1 ? `_${safeFilenamePart(tpl.name.replace(/\.[^.]+$/, ""))}` : "";
         outputs.push({ blob, filename: `${baseFilename}${suffix}.${format === "pdf" ? "pdf" : "jpg"}` });
       }

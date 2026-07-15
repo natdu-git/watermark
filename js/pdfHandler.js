@@ -58,6 +58,28 @@ const PdfHandler = (() => {
     });
   }
 
+  // Overlay the watermark on the ORIGINAL pdf as a transparent layer, keeping
+  // the underlying page content as vectors (selectable text, small file, crisp).
+  // opts: { text, columns, paddingRatio, angleDeg, opacity, style }
+  async function overlayOnPdf(blob, opts) {
+    const { PDFDocument } = window.PDFLib;
+    const bytes = await blob.arrayBuffer();
+    const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+    const RENDER_SCALE = 2; // ~144 DPI overlay render for crisp watermark text
+
+    for (const page of pdfDoc.getPages()) {
+      const { width, height } = page.getSize();
+      const W = Math.max(1, Math.round(width * RENDER_SCALE));
+      const H = Math.max(1, Math.round(height * RENDER_SCALE));
+      const overlay = await Watermark.buildOverlay(W, H, opts);
+      const png = await pdfDoc.embedPng(overlay.toDataURL("image/png"));
+      page.drawImage(png, { x: 0, y: 0, width, height });
+    }
+
+    const out = await pdfDoc.save();
+    return new Blob([out], { type: "application/pdf" });
+  }
+
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -69,5 +91,5 @@ const PdfHandler = (() => {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
-  return { loadAsCanvas, canvasToBlob, downloadBlob };
+  return { loadAsCanvas, canvasToBlob, overlayOnPdf, downloadBlob };
 })();

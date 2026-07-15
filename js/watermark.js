@@ -57,12 +57,10 @@ const Watermark = (() => {
     ctx.closePath();
   }
 
-  // sourceCanvas: canvas with the base template already drawn (RGB)
-  // opts: { text, columns, paddingRatio, angleDeg, opacity, style }
-  async function apply(sourceCanvas, opts) {
-    const { text, columns, paddingRatio, angleDeg, opacity, style } = opts;
-    const W = sourceCanvas.width;
-    const H = sourceCanvas.height;
+  // Build just the rotated watermark tiling, positioned for a W×H page.
+  // Returns { rotatedCanvas, pasteX, pasteY } — no source, no opacity applied.
+  async function buildRotatedOverlay(W, H, opts) {
+    const { text, columns, paddingRatio, angleDeg, style } = opts;
     const preset = STYLE_PRESETS[style] || STYLE_PRESETS.light;
 
     const totalColumnRatio = columns * (1 + paddingRatio);
@@ -143,23 +141,41 @@ const Watermark = (() => {
     rotCtx.rotate(angleRad);
     rotCtx.drawImage(tilingCanvas, -tilingW / 2, -tilingH / 2);
 
-    // Step 6: composite the rotated overlay, centered, over the source at the
-    // requested opacity.
+    const pasteX = (W - rotBoundW) / 2;
+    const pasteY = (H - rotBoundH) / 2;
+    return { rotatedCanvas, pasteX, pasteY };
+  }
+
+  // Composite the watermark over an existing source canvas (image path / preview).
+  async function apply(sourceCanvas, opts) {
+    const W = sourceCanvas.width;
+    const H = sourceCanvas.height;
+    const { rotatedCanvas, pasteX, pasteY } = await buildRotatedOverlay(W, H, opts);
+
     const outCanvas = document.createElement("canvas");
     outCanvas.width = W;
     outCanvas.height = H;
     const outCtx = outCanvas.getContext("2d");
     outCtx.drawImage(sourceCanvas, 0, 0);
-
-    const pasteX = (W - rotBoundW) / 2;
-    const pasteY = (H - rotBoundH) / 2;
     outCtx.save();
-    outCtx.globalAlpha = opacity;
+    outCtx.globalAlpha = opts.opacity;
     outCtx.drawImage(rotatedCanvas, pasteX, pasteY);
     outCtx.restore();
-
     return outCanvas;
   }
 
-  return { apply, STYLE_PRESETS };
+  // Build a transparent W×H overlay (opacity baked in) for compositing onto a
+  // vector PDF page as a PNG. No source drawn.
+  async function buildOverlay(W, H, opts) {
+    const { rotatedCanvas, pasteX, pasteY } = await buildRotatedOverlay(W, H, opts);
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    ctx.globalAlpha = opts.opacity;
+    ctx.drawImage(rotatedCanvas, pasteX, pasteY);
+    return canvas;
+  }
+
+  return { apply, buildOverlay, STYLE_PRESETS };
 })();
