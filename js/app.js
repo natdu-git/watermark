@@ -52,6 +52,18 @@
 
   const thumbCache = new Map();
   const THUMB_MAX_IMAGE_DIM = 200;
+
+  // Decoded preview-resolution source canvas per template id, so dragging a
+  // settings slider re-runs Watermark.apply() on an already-decoded canvas
+  // instead of re-rendering the PDF/image from scratch every time.
+  const PREVIEW_SOURCE_DPI = 150;
+  const previewSourceCache = new Map();
+  async function getPreviewSourceCanvas(tpl) {
+    if (previewSourceCache.has(tpl.id)) return previewSourceCache.get(tpl.id);
+    const canvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, PREVIEW_SOURCE_DPI);
+    previewSourceCache.set(tpl.id, canvas);
+    return canvas;
+  }
   async function renderThumb(tpl) {
     if (thumbCache.has(tpl.id)) return thumbCache.get(tpl.id);
     const canvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 40, THUMB_MAX_IMAGE_DIM);
@@ -283,6 +295,7 @@
     await TemplateDB.deleteTemplate(activeTemplateForSettings.id);
     state.selectedTemplateIds.delete(activeTemplateForSettings.id);
     thumbCache.delete(activeTemplateForSettings.id);
+    previewSourceCache.delete(activeTemplateForSettings.id);
     await refreshTemplates();
     schedulePreview();
   });
@@ -629,42 +642,29 @@
     state.previewTimer = setTimeout(runPreview, 300);
   }
 
-  async function runPreview() {
-    const selected = selectedTemplatesInOrder();
-    const track = el("previewTrack");
-    const hint = el("previewHint");
-    const dots = el("previewDots");
+  // Tracks what's currently mounted in #previewTrack so runPreview() can tell
+  // a pure settings/style/text change (reuse existing slide DOM, just repaint
+  // the canvases) apart from a template-selection change (rebuild the slide
+  // list). This is what avoids the clear-then-refill collapse/jump.
+  let previewOrderIds = [];
+  const previewSlideEls = new Map(); // tpl.id -> { slideEl, canvasEl }
 
-    if (selected.length === 0) {
-      track.innerHTML = "";
-      dots.innerHTML = "";
-      hint.style.display = "block";
-      return;
-    }
-    hint.style.display = "none";
+  // Renders the watermarked result for one template using the cached,
+  // already-decoded source canvas (no PDF/image re-decode).
+  async function renderSlideResult(tpl, text, settings) {
+    const srcCanvas = await getPreviewSourceCanvas(tpl);
+    return Watermark.apply(srcCanvas, { text, ...settings });
+  }
 
-    const text = buildWatermarkText();
-    const settings = readSettings();
+  function paintCanvas(canvasEl, resultCanvas) {
+    if (canvasEl.width !== resultCanvas.width) canvasEl.width = resultCanvas.width;
+    if (canvasEl.height !== resultCanvas.height) canvasEl.height = resultCanvas.height;
+    const ctx = canvasEl.getContext("2d");
+    ctx.drawImage(resultCanvas, 0, 0);
+  }
 
-    track.innerHTML = "";
+  function setupDotsAndScroll(track, dots, selected) {
     dots.innerHTML = "";
-
-    for (let i = 0; i < selected.length; i++) {
-      const tpl = selected[i];
-      const slide = document.createElement("div");
-      slide.className = "preview-slide";
-      slide.dataset.tplId = tpl.id;
-      track.appendChild(slide);
-      try {
-        const srcCanvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 150);
-        const result = await Watermark.apply(srcCanvas, { text, ...settings });
-        slide.appendChild(result);
-      } catch (err) {
-        console.error(err);
-        slide.textContent = "Preview error";
-      }
-    }
-
     if (selected.length > 1) {
       selected.forEach((_, i) => {
         const dot = document.createElement("div");
@@ -681,6 +681,98 @@
       };
     } else {
       track.onscroll = null;
+    }
+  }
+
+  // Selection of templates (or their order) changed: rebuild the slide DOM.
+  // Some layout shift here is expected/acceptable — the visible document set
+  // actually changed.
+  async function rebuildSlides(selected, text, settings) {
+    const track = el("previewTrack");
+    const dots = el("previewDots");
+
+    track.innerHTML = "";
+    previewSlideEls.clear();
+
+    for (let i = 0; i < selected.length; i++) {
+      const tpl = selected[i];
+      const slide = document.createElement("div");
+      slide.className = "preview-slide";
+      slide.dataset.tplId = tpl.id;
+      track.appendChild(slide);
+      try {
+        const result = await renderSlideResult(tpl, text, settings);
+        const canvasEl = document.createElement("canvas");
+        canvasEl.width = result.width;
+        canvasEl.height = result.height;
+        canvasEl.getContext("2d").drawImage(result, 0, 0);
+        slide.appendChild(canvasEl);
+        previewSlideEls.set(tpl.id, { slideEl: slide, canvasEl });
+      } catch (err) {
+        console.error(err);
+        slide.textContent = "Preview error";
+        previewSlideEls.set(tpl.id, { slideEl: slide, canvasEl: null });
+      }
+    }
+
+    previewOrderIds = selected.map(t => t.id);
+    setupDotsAndScroll(track, dots, selected);
+  }
+
+  // Pure settings/style/text change with the same templates selected (same
+  // ids, same order): repaint each existing canvas in place. No DOM nodes
+  // are removed or added, so there is no reflow/collapse.
+  async function updateSlidesInPlace(selected, text, settings) {
+    for (const tpl of selected) {
+      const entry = previewSlideEls.get(tpl.id);
+      if (!entry) continue; // shouldn't happen if selection signature matched
+      try {
+        const result = await renderSlideResult(tpl, text, settings);
+        if (entry.canvasEl) {
+          paintCanvas(entry.canvasEl, result);
+        } else {
+          // Previous render errored and left no canvas — add one now.
+          entry.slideEl.textContent = "";
+          const canvasEl = document.createElement("canvas");
+          canvasEl.width = result.width;
+          canvasEl.height = result.height;
+          canvasEl.getContext("2d").drawImage(result, 0, 0);
+          entry.slideEl.appendChild(canvasEl);
+          entry.canvasEl = canvasEl;
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  }
+
+  async function runPreview() {
+    const selected = selectedTemplatesInOrder();
+    const track = el("previewTrack");
+    const hint = el("previewHint");
+    const dots = el("previewDots");
+
+    if (selected.length === 0) {
+      track.innerHTML = "";
+      dots.innerHTML = "";
+      track.onscroll = null;
+      previewOrderIds = [];
+      previewSlideEls.clear();
+      hint.style.display = "block";
+      return;
+    }
+    hint.style.display = "none";
+
+    const text = buildWatermarkText();
+    const settings = readSettings();
+    const newIds = selected.map(t => t.id);
+    const sameSelection = newIds.length === previewOrderIds.length &&
+      newIds.every((id, i) => id === previewOrderIds[i]);
+
+    if (sameSelection) {
+      await updateSlidesInPlace(selected, text, settings);
+    } else {
+      await rebuildSlides(selected, text, settings);
     }
   }
 

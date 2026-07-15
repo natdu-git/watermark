@@ -271,7 +271,7 @@ main {
 
 .preview-wrap {
   position: relative;
-  min-height: 200px;
+  min-height: 260px;
   background: #eef0f3;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -283,10 +283,11 @@ main {
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
-  min-height: 200px;
+  min-height: 260px;
 }
 .preview-slide {
   flex: 0 0 100%;
+  min-height: 260px;
   scroll-snap-align: center;
   display: flex;
   align-items: center;
