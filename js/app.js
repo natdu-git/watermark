@@ -770,8 +770,17 @@
     }
   });
 
+  // ---------- App version (single source of truth: <meta name="app-version">) ----------
+
+  function renderAppVersion() {
+    const meta = document.querySelector('meta[name="app-version"]');
+    const versionEl = el("appVersion");
+    if (meta && versionEl) versionEl.textContent = `v${meta.content}`;
+  }
+
   // ---------- Init ----------
   async function init() {
+    renderAppVersion();
     applySettingsToControls(getSettingsDefault());
     renderLines();
     await refreshTemplates();

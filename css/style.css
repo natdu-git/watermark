@@ -33,8 +33,19 @@ input, select, button, textarea {
   position: sticky;
   top: 0;
   z-index: 10;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
 }
-.topbar h1 { margin: 0; font-size: 18px; font-weight: 700; font-family: var(--font-stack); }
+.topbar h1 { margin: 0; font-size: 18px; font-weight: 700; font-family: var(--font-stack); min-width: 0; }
+.app-version {
+  flex: none;
+  font-size: 11px;
+  color: rgba(255,255,255,0.65);
+  font-weight: 400;
+  white-space: nowrap;
+}
 
 main {
   padding: 12px;
