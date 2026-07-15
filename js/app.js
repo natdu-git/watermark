@@ -489,15 +489,23 @@
 
   el("customerListSearch").addEventListener("input", refreshCustomerList);
 
-  // ---------- Bulk import ----------
+  // ---------- Bulk import (guided "Import customers" popup) ----------
+
+  el("importCustomersBtn").addEventListener("click", () => UI.showOverlay("importCustomersOverlay"));
+  el("importCustomersCloseBtn").addEventListener("click", () => UI.hideOverlay("importCustomersOverlay"));
+  el("importCustomersOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "importCustomersOverlay") UI.hideOverlay("importCustomersOverlay");
+  });
 
   el("downloadTemplateBtn").addEventListener("click", () => CustomerImport.downloadBlankTemplate());
-  el("bulkUploadBtn").addEventListener("click", () => el("bulkFileInput").click());
+  el("chooseFilledFileBtn").addEventListener("click", () => el("bulkFileInput").click());
 
   el("bulkFileInput").addEventListener("change", async (e) => {
     const file = e.target.files[0];
     e.target.value = "";
     if (!file) return;
+
+    UI.hideOverlay("importCustomersOverlay");
 
     const rows = await CustomerImport.parseFile(file);
     const { clean, conflicts } = await CustomerImport.classifyRows(rows);
@@ -556,11 +564,29 @@
 
   // ---------- Settings ----------
 
+  const SETTINGS_SLIDER_IDS = ["columns", "padding", "angle", "opacity"];
+
+  // Cross-browser fill: WebKit doesn't fill the lower portion of a range
+  // input natively, so we compute the value's position as a percentage and
+  // expose it as a CSS custom property, which the track pseudo-element's
+  // gradient reads (custom properties inherit into ::-webkit-*-track).
+  function updateSliderFill(slider) {
+    const min = parseFloat(slider.min) || 0;
+    const max = parseFloat(slider.max) || 100;
+    const val = parseFloat(slider.value);
+    const pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
+    slider.style.setProperty("--range-progress", `${pct}%`);
+  }
+
   [["columns", "columnsOut"], ["padding", "paddingOut"], ["angle", "angleOut"], ["opacity", "opacityOut"]]
     .forEach(([sliderId, outId]) => {
       const slider = el(sliderId);
       const out = el(outId);
-      slider.addEventListener("input", () => { out.textContent = slider.value; schedulePreview(); });
+      slider.addEventListener("input", () => {
+        out.textContent = slider.value;
+        updateSliderFill(slider);
+        schedulePreview();
+      });
     });
 
   document.querySelectorAll("#styleToggle .icon-seg").forEach((btn) => {
@@ -603,6 +629,7 @@
     el("padding").value = defaults.padding; el("paddingOut").textContent = String(defaults.padding);
     el("angle").value = defaults.angle; el("angleOut").textContent = String(defaults.angle);
     el("opacity").value = defaults.opacity; el("opacityOut").textContent = String(defaults.opacity);
+    SETTINGS_SLIDER_IDS.forEach(id => updateSliderFill(el(id)));
     document.querySelectorAll("#styleToggle .icon-seg").forEach(b => b.classList.remove("active"));
     const styleBtn = document.querySelector(`#styleToggle .icon-seg[data-style="${defaults.style}"]`);
     (styleBtn || document.querySelector('#styleToggle .icon-seg[data-style="light"]')).classList.add("active");
