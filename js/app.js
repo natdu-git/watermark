@@ -1,5 +1,6 @@
-// Main app wiring: navigation, template library, customer list, dynamic
-// watermark lines, live preview, settings, and export.
+// Main app wiring: navigation, template library, dynamic watermark lines,
+// inline customer search, live multi-template preview carousel, settings,
+// export, and post-create save-customer prompt.
 (() => {
   const THAI_MONTHS = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน",
                        "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
@@ -8,8 +9,8 @@
 
   function defaultLines() {
     return [
-      { id: "shop",    role: "shop",    label: "ชื่อร้าน/บริษัท",       value: "", type: "text" },
-      { id: "license", role: "license", label: "เลขที่ใบอนุญาต",        value: "", type: "text" },
+      { id: "shop",    role: "shop",    label: "ชื่อร้านค้า/บริษัท",     value: "", type: "text" },
+      { id: "license", role: "license", label: "เลขที่ใบอนุญาติ",        value: "", type: "text" },
       { id: "order",   role: "order",   label: "เลขที่ใบเสร็จรับเงิน",  value: "", type: "text" },
       { id: "date",    role: "date",    label: "สั่งซื้อวันที่",         value: new Date().toISOString().slice(0, 10), type: "date" }
     ];
@@ -23,7 +24,8 @@
     nextLineId: 1,
     customers: [],
     conflictQueue: [],
-    previewTimer: null
+    previewTimer: null,
+    previewIndex: 0
   };
 
   // ---------- Navigation ----------
@@ -40,7 +42,7 @@
     elm.addEventListener("click", () => showPage(elm.dataset.nav));
   });
 
-  // ---------- Template library (shared by Create picker + Setup manager) ----------
+  // ---------- Template library (Create picker + Setup manager) ----------
 
   const thumbCache = new Map();
   async function renderThumb(tpl) {
@@ -101,18 +103,17 @@
       const name = document.createElement("div");
       name.className = "name";
       name.textContent = tpl.name;
-      const delBtn = document.createElement("button");
-      delBtn.className = "del-btn";
-      delBtn.textContent = "×";
-      delBtn.addEventListener("click", async (e) => {
+      const settingsBtn = document.createElement("button");
+      settingsBtn.className = "settings-btn";
+      settingsBtn.textContent = "⚙";
+      settingsBtn.title = "Template settings";
+      settingsBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        await TemplateDB.deleteTemplate(tpl.id);
-        state.selectedTemplateIds.delete(tpl.id);
-        await refreshTemplates();
+        openTemplateSettings(tpl);
       });
       item.appendChild(thumb);
       item.appendChild(name);
-      item.appendChild(delBtn);
+      item.appendChild(settingsBtn);
       container.appendChild(item);
     }
   }
@@ -132,6 +133,38 @@
     await refreshTemplates();
   });
 
+  // ---------- Template settings popup (rename / delete) ----------
+
+  let activeTemplateForSettings = null;
+
+  function openTemplateSettings(tpl) {
+    activeTemplateForSettings = tpl;
+    el("templateNameInput").value = tpl.name;
+    UI.showOverlay("templateSettingsOverlay");
+  }
+
+  el("templateSaveBtn").addEventListener("click", async () => {
+    if (!activeTemplateForSettings) return;
+    const newName = el("templateNameInput").value.trim();
+    if (!newName) return;
+    await TemplateDB.renameTemplate(activeTemplateForSettings.id, newName);
+    UI.hideOverlay("templateSettingsOverlay");
+    thumbCache.delete(activeTemplateForSettings.id);
+    await refreshTemplates();
+  });
+
+  el("templateDeleteBtn").addEventListener("click", async () => {
+    if (!activeTemplateForSettings) return;
+    UI.hideOverlay("templateSettingsOverlay");
+    const ok = await UI.confirmDialog(`Delete "${activeTemplateForSettings.name}"? This can't be undone.`);
+    if (!ok) return;
+    await TemplateDB.deleteTemplate(activeTemplateForSettings.id);
+    state.selectedTemplateIds.delete(activeTemplateForSettings.id);
+    thumbCache.delete(activeTemplateForSettings.id);
+    await refreshTemplates();
+    schedulePreview();
+  });
+
   // ---------- Dynamic watermark lines ----------
 
   function renderLines() {
@@ -141,20 +174,24 @@
       const row = document.createElement("div");
       row.className = "line-row";
 
+      const titleRow = document.createElement("div");
+      titleRow.className = "line-title-row";
+
       const labelInput = document.createElement("input");
       labelInput.className = "line-label";
       labelInput.value = line.label;
       labelInput.placeholder = "Label";
       labelInput.addEventListener("input", () => { line.label = labelInput.value; schedulePreview(); });
+      titleRow.appendChild(labelInput);
 
-      const valueInput = document.createElement("input");
-      valueInput.className = line.type === "date" ? "line-value line-date" : "line-value";
-      valueInput.type = line.type === "date" ? "date" : "text";
-      valueInput.value = line.value;
-      valueInput.placeholder = "Value";
-      valueInput.addEventListener("input", () => { line.value = valueInput.value; schedulePreview(); });
-      if (line.role === "shop") line.shopInputRef = valueInput;
-      if (line.role === "license") line.licenseInputRef = valueInput;
+      if (line.role === "shop" || line.role === "license") {
+        const searchBtn = document.createElement("button");
+        searchBtn.className = "search-icon-btn";
+        searchBtn.textContent = "\u{1F50D}";
+        searchBtn.title = "Search customers";
+        searchBtn.addEventListener("click", () => openCustomerSearch());
+        titleRow.appendChild(searchBtn);
+      }
 
       const delBtn = document.createElement("button");
       delBtn.className = "line-del";
@@ -166,10 +203,19 @@
         renderLines();
         schedulePreview();
       });
+      titleRow.appendChild(delBtn);
 
-      row.appendChild(labelInput);
+      const valueInput = document.createElement("input");
+      valueInput.className = "line-value";
+      valueInput.type = line.type === "date" ? "date" : "text";
+      valueInput.value = line.value;
+      valueInput.placeholder = "Value";
+      valueInput.addEventListener("input", () => { line.value = valueInput.value; schedulePreview(); });
+      if (line.role === "shop") line.shopInputRef = valueInput;
+      if (line.role === "license") line.licenseInputRef = valueInput;
+
+      row.appendChild(titleRow);
       row.appendChild(valueInput);
-      row.appendChild(delBtn);
       container.appendChild(row);
     });
   }
@@ -205,75 +251,80 @@
       .join("\n");
   }
 
-  // ---------- Customer search (Create page) ----------
+  // ---------- Customer search (inline, opened from search icons) ----------
 
   async function loadCustomers() {
     state.customers = await CustomerDB.getAll();
   }
 
-  const customerSearchInput = el("customerSearch");
-  const suggestionsEl = el("customerSuggestions");
-  const newLicenseInput = el("newLicenseInput");
-  const customerErrorEl = el("customerError");
+  function openCustomerSearch() {
+    const shopLine = state.lines.find(l => l.role === "shop");
+    const input = el("searchOverlayInput");
+    input.value = shopLine ? shopLine.value : "";
+    renderSearchOverlayResults(input.value);
+    UI.showOverlay("searchOverlay");
+    input.focus();
+  }
 
-  function renderSuggestions(query) {
+  function renderSearchOverlayResults(query) {
     const q = query.trim().toLowerCase();
-    if (!q) { suggestionsEl.classList.remove("open"); suggestionsEl.innerHTML = ""; return; }
-    const matches = state.customers.filter(c =>
-      c.shopName.toLowerCase().includes(q) || c.licenseNumber.toLowerCase().includes(q)
-    ).slice(0, 8);
-
-    suggestionsEl.innerHTML = "";
-    for (const c of matches) {
+    const list = q
+      ? state.customers.filter(c => c.shopName.toLowerCase().includes(q) || c.licenseNumber.toLowerCase().includes(q))
+      : state.customers;
+    const container = el("searchOverlayResults");
+    container.innerHTML = "";
+    for (const c of list.slice(0, 30)) {
       const item = document.createElement("div");
       item.className = "suggestion-item";
       item.innerHTML = `<div class="s-name">${c.shopName}</div><div class="s-license">${c.licenseNumber}</div>`;
       item.addEventListener("click", () => {
-        customerSearchInput.value = c.shopName;
-        newLicenseInput.value = c.licenseNumber;
         setCustomerFields(c.shopName, c.licenseNumber);
-        suggestionsEl.classList.remove("open");
-        customerErrorEl.textContent = "";
+        UI.hideOverlay("searchOverlay");
         schedulePreview();
       });
-      suggestionsEl.appendChild(item);
+      container.appendChild(item);
     }
-    suggestionsEl.classList.toggle("open", matches.length > 0);
   }
 
-  customerSearchInput.addEventListener("input", () => {
-    setCustomerFields(customerSearchInput.value, newLicenseInput.value);
-    renderSuggestions(customerSearchInput.value);
-    customerErrorEl.textContent = "";
-    schedulePreview();
-  });
-  customerSearchInput.addEventListener("blur", () => {
-    setTimeout(() => suggestionsEl.classList.remove("open"), 150);
-  });
+  el("searchOverlayInput").addEventListener("input", (e) => renderSearchOverlayResults(e.target.value));
+  el("searchOverlayCloseBtn").addEventListener("click", () => UI.hideOverlay("searchOverlay"));
 
-  newLicenseInput.addEventListener("input", () => {
-    setCustomerFields(customerSearchInput.value, newLicenseInput.value);
-    customerErrorEl.textContent = "";
-    schedulePreview();
-  });
+  // ---------- Post-create save-customer prompt ----------
 
-  el("saveNewCustomerBtn").addEventListener("click", async () => {
-    const shopName = customerSearchInput.value.trim();
-    const licenseNumber = newLicenseInput.value.trim();
-    if (!shopName || !licenseNumber) {
-      customerErrorEl.textContent = "Enter both shop name and license number to save.";
-      return;
-    }
-    const dup = await CustomerDB.findDuplicate(shopName, licenseNumber);
-    if (dup) {
-      customerErrorEl.textContent = `Conflicts with existing customer: ${dup.shopName} (${dup.licenseNumber}). Edit the name or license to resolve.`;
-      return;
-    }
-    await CustomerDB.add({ shopName, licenseNumber });
-    await loadCustomers();
-    customerErrorEl.textContent = "";
-    setStatus("Customer saved.");
-  });
+  function requestSaveCustomerIfNew() {
+    return new Promise((resolve) => {
+      const shopLine = state.lines.find(l => l.role === "shop");
+      const licenseLine = state.lines.find(l => l.role === "license");
+      const shopName = shopLine ? shopLine.value.trim() : "";
+      const licenseNumber = licenseLine ? licenseLine.value.trim() : "";
+
+      if (!shopName || !licenseNumber) { resolve(); return; }
+
+      CustomerDB.findDuplicate(shopName, licenseNumber).then((existing) => {
+        if (existing) { resolve(); return; }
+
+        el("saveCustomerMessage").textContent = `Save "${shopName}" (${licenseNumber}) as a customer for next time?`;
+        UI.showOverlay("saveCustomerOverlay");
+
+        function cleanup() {
+          UI.hideOverlay("saveCustomerOverlay");
+          skipBtn.removeEventListener("click", onSkip);
+          saveBtn.removeEventListener("click", onSave);
+          resolve();
+        }
+        const skipBtn = el("skipSaveCustomerBtn");
+        const saveBtn = el("confirmSaveCustomerBtn");
+        function onSkip() { cleanup(); }
+        async function onSave() {
+          await CustomerDB.add({ shopName, licenseNumber });
+          await loadCustomers();
+          cleanup();
+        }
+        skipBtn.addEventListener("click", onSkip);
+        saveBtn.addEventListener("click", onSave);
+      });
+    });
+  }
 
   // ---------- Setup: customer list management ----------
 
@@ -298,6 +349,8 @@
         <div class="c-actions"><button class="del" title="Delete">×</button></div>
       `;
       row.querySelector(".del").addEventListener("click", async () => {
+        const ok = await UI.confirmDialog(`Delete customer "${c.shopName}"?`);
+        if (!ok) return;
         await CustomerDB.deleteCustomer(c.id);
         await refreshCustomerList();
       });
@@ -390,8 +443,6 @@
     });
   });
 
-  el("outputFormat").addEventListener("change", () => {});
-
   function readSettings() {
     return {
       columns: parseInt(el("columns").value, 10),
@@ -402,14 +453,23 @@
     };
   }
 
+  function resetSettings() {
+    el("columns").value = 3; el("columnsOut").textContent = "3";
+    el("padding").value = 15; el("paddingOut").textContent = "15";
+    el("angle").value = 45; el("angleOut").textContent = "45";
+    el("opacity").value = 20; el("opacityOut").textContent = "20";
+    document.querySelectorAll("#styleToggle .seg-btn").forEach(b => b.classList.remove("active"));
+    document.querySelector('#styleToggle .seg-btn[data-style="light"]').classList.add("active");
+    state.currentStyle = "light";
+    el("outputFormat").value = "pdf";
+  }
+
   function setStatus(msg) { el("statusLine").textContent = msg || ""; }
 
-  // ---------- Live preview ----------
+  // ---------- Live preview (swipeable multi-template carousel) ----------
 
-  function firstSelectedTemplate() {
-    if (state.selectedTemplateIds.size === 0) return null;
-    const id = Array.from(state.selectedTemplateIds)[0];
-    return state.templates.find(t => t.id === id) || null;
+  function selectedTemplatesInOrder() {
+    return state.templates.filter(t => state.selectedTemplateIds.has(t.id));
   }
 
   function schedulePreview() {
@@ -418,27 +478,56 @@
   }
 
   async function runPreview() {
-    const tpl = firstSelectedTemplate();
-    const canvas = el("previewCanvas");
+    const selected = selectedTemplatesInOrder();
+    const track = el("previewTrack");
     const hint = el("previewHint");
-    if (!tpl) {
-      canvas.classList.remove("visible");
+    const dots = el("previewDots");
+
+    if (selected.length === 0) {
+      track.innerHTML = "";
+      dots.innerHTML = "";
       hint.style.display = "block";
       return;
     }
-    try {
-      const srcCanvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 150);
-      const text = buildWatermarkText();
-      const settings = readSettings();
-      const result = await Watermark.apply(srcCanvas, { text, ...settings });
-      canvas.width = result.width;
-      canvas.height = result.height;
-      canvas.getContext("2d").drawImage(result, 0, 0);
-      canvas.classList.add("visible");
-      hint.style.display = "none";
-    } catch (err) {
-      console.error(err);
-      setStatus("Preview error: " + err.message);
+    hint.style.display = "none";
+
+    const text = buildWatermarkText();
+    const settings = readSettings();
+
+    track.innerHTML = "";
+    dots.innerHTML = "";
+
+    for (let i = 0; i < selected.length; i++) {
+      const tpl = selected[i];
+      const slide = document.createElement("div");
+      slide.className = "preview-slide";
+      track.appendChild(slide);
+      try {
+        const srcCanvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 150);
+        const result = await Watermark.apply(srcCanvas, { text, ...settings });
+        slide.appendChild(result);
+      } catch (err) {
+        console.error(err);
+        slide.textContent = "Preview error";
+      }
+    }
+
+    if (selected.length > 1) {
+      selected.forEach((_, i) => {
+        const dot = document.createElement("div");
+        dot.className = "dot" + (i === 0 ? " active" : "");
+        dot.addEventListener("click", () => {
+          track.scrollTo({ left: track.clientWidth * i, behavior: "smooth" });
+        });
+        dots.appendChild(dot);
+      });
+
+      track.onscroll = () => {
+        const idx = Math.round(track.scrollLeft / track.clientWidth);
+        dots.querySelectorAll(".dot").forEach((d, i) => d.classList.toggle("active", i === idx));
+      };
+    } else {
+      track.onscroll = null;
     }
   }
 
@@ -458,12 +547,22 @@
     return `watermarked_${new Date().toISOString().slice(0, 10)}`;
   }
 
+  el("cancelBtn").addEventListener("click", () => {
+    state.selectedTemplateIds.clear();
+    state.lines = defaultLines();
+    renderLines();
+    resetSettings();
+    renderTemplatePicker();
+    schedulePreview();
+    setStatus("");
+  });
+
   el("createBtn").addEventListener("click", async () => {
     if (state.selectedTemplateIds.size === 0) {
       setStatus("Select at least one template first.");
       return;
     }
-    const selected = state.templates.filter(t => state.selectedTemplateIds.has(t.id));
+    const selected = selectedTemplatesInOrder();
     const text = buildWatermarkText();
     const settings = readSettings();
     const format = el("outputFormat").value;
@@ -492,6 +591,7 @@
         PdfHandler.downloadBlob(zipBlob, `${baseFilename}_watermarked.zip`);
       }
       setStatus(`Done — ${outputs.length} file(s) saved.`);
+      await requestSaveCustomerIfNew();
     } catch (err) {
       console.error(err);
       setStatus("Error: " + err.message);

@@ -25,22 +25,9 @@
       <h2>Templates</h2>
       <span class="hint-link" data-nav="setup">Manage in Setup</span>
     </div>
-    <div id="templatePicker" class="template-list">
+    <div id="templatePicker" class="template-row">
       <p class="empty-hint">No templates yet. Go to Setup to upload some.</p>
     </div>
-  </section>
-
-  <section class="card">
-    <h2>Customer</h2>
-    <div class="search-wrap">
-      <input type="text" id="customerSearch" placeholder="ค้นหาลูกค้า หรือพิมพ์ชื่อใหม่">
-      <div id="customerSuggestions" class="suggestions"></div>
-    </div>
-    <div id="newCustomerRow" class="new-customer-row">
-      <input type="text" id="newLicenseInput" class="field-value" placeholder="เลขที่ใบอนุญาต">
-      <button id="saveNewCustomerBtn" class="btn btn-small">Save customer</button>
-    </div>
-    <p id="customerError" class="error-line"></p>
   </section>
 
   <section class="card">
@@ -55,36 +42,41 @@
   <!-- Preview + Settings unit: preview on top, live-updating settings below -->
   <section class="card preview-settings-unit">
     <div id="previewWrap" class="preview-wrap">
-      <canvas id="previewCanvas"></canvas>
+      <div id="previewTrack" class="preview-track"></div>
       <p id="previewHint" class="empty-hint">Select a template to see a live preview.</p>
     </div>
+    <div id="previewDots" class="preview-dots"></div>
 
     <div class="compact-settings">
       <div class="compact-row">
-        <span class="compact-label">Columns <b id="columnsOut">3</b></span>
+        <span class="compact-value" id="columnsOut">3</span>
         <input type="range" id="columns" min="1" max="8" value="3">
+        <span class="compact-label">Columns</span>
       </div>
       <div class="compact-row">
-        <span class="compact-label">Padding <b id="paddingOut">15</b>%</span>
+        <span class="compact-value"><span id="paddingOut">15</span>%</span>
         <input type="range" id="padding" min="0" max="60" value="15">
+        <span class="compact-label">Padding</span>
       </div>
       <div class="compact-row">
-        <span class="compact-label">Angle <b id="angleOut">45</b>°</span>
+        <span class="compact-value"><span id="angleOut">45</span>°</span>
         <input type="range" id="angle" min="0" max="90" value="45">
+        <span class="compact-label">Angle</span>
       </div>
       <div class="compact-row">
-        <span class="compact-label">Opacity <b id="opacityOut">20</b>%</span>
+        <span class="compact-value"><span id="opacityOut">20</span>%</span>
         <input type="range" id="opacity" min="5" max="100" value="20">
+        <span class="compact-label">Opacity</span>
       </div>
       <div class="compact-row">
-        <span class="compact-label">Style</span>
+        <span class="compact-label" style="width:auto">Style</span>
         <div class="segmented" id="styleToggle">
           <button data-style="light" class="seg-btn active">Light</button>
           <button data-style="dark" class="seg-btn">Dark</button>
         </div>
       </div>
       <div class="compact-row">
-        <span class="compact-label">Output</span>
+        <span class="compact-label" style="width:auto">Output</span>
         <select id="outputFormat">
           <option value="pdf">PDF</option>
           <option value="jpg">JPG</option>
@@ -94,6 +86,7 @@
   </section>
 
   <div class="action-bar">
+    <button id="cancelBtn" class="btn btn-secondary">Cancel</button>
     <button id="createBtn" class="btn btn-primary">Create File(s)</button>
   </div>
 
@@ -109,7 +102,7 @@
       <button id="uploadBtn" class="btn btn-small">+ Upload</button>
       <input type="file" id="fileInput" accept="application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg" multiple hidden>
     </div>
-    <div id="templateList" class="template-list">
+    <div id="templateList" class="template-row">
       <p class="empty-hint">No templates yet. Tap "+ Upload" to add PDF or image templates. They'll stay saved on this device.</p>
     </div>
   </section>
@@ -144,6 +137,50 @@
   </button>
 </nav>
 
+<!-- Generic confirm dialog -->
+<div id="confirmOverlay" class="modal-overlay" style="display:none">
+  <div class="modal-card">
+    <p id="confirmMessage" class="modal-message"></p>
+    <div class="modal-actions">
+      <button id="confirmCancelBtn" class="btn btn-secondary">Cancel</button>
+      <button id="confirmOkBtn" class="btn btn-danger">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Save-new-customer prompt (shown after Create) -->
+<div id="saveCustomerOverlay" class="modal-overlay" style="display:none">
+  <div class="modal-card">
+    <p id="saveCustomerMessage" class="modal-message"></p>
+    <div class="modal-actions">
+      <button id="skipSaveCustomerBtn" class="btn btn-secondary">Skip</button>
+      <button id="confirmSaveCustomerBtn" class="btn btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Customer search popover (opened from search icon on shop/license lines) -->
+<div id="searchOverlay" class="modal-overlay" style="display:none">
+  <div class="modal-card">
+    <input type="text" id="searchOverlayInput" placeholder="Search customers" class="field-value" style="margin-bottom:10px">
+    <div id="searchOverlayResults" class="search-overlay-results"></div>
+    <div class="modal-actions">
+      <button id="searchOverlayCloseBtn" class="btn btn-secondary btn-full">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template settings popup (rename / delete) -->
+<div id="templateSettingsOverlay" class="modal-overlay" style="display:none">
+  <div class="modal-card">
+    <input type="text" id="templateNameInput" class="field-value" style="margin-bottom:10px">
+    <div class="modal-actions">
+      <button id="templateDeleteBtn" class="btn btn-danger">Delete</button>
+      <button id="templateSaveBtn" class="btn btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -155,6 +192,7 @@
 <script src="js/customerImport.js"></script>
 <script src="js/pdfHandler.js"></script>
 <script src="js/watermark.js"></script>
+<script src="js/ui.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

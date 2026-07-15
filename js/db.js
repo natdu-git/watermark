@@ -66,7 +66,23 @@ const TemplateDB = (() => {
     });
   }
 
-  return { addTemplate, getAll, deleteTemplate };
+  async function renameTemplate(id, newName) {
+    const db = await AppDB.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(AppDB.TEMPLATE_STORE, "readwrite");
+      const store = tx.objectStore(AppDB.TEMPLATE_STORE);
+      const getReq = store.get(id);
+      getReq.onsuccess = () => {
+        const record = { ...getReq.result, name: newName };
+        const putReq = store.put(record);
+        putReq.onsuccess = () => resolve(record);
+        putReq.onerror = () => reject(putReq.error);
+      };
+      getReq.onerror = () => reject(getReq.error);
+    });
+  }
+
+  return { addTemplate, getAll, deleteTemplate, renameTemplate };
 })();
 
 const CustomerDB = (() => {
