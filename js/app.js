@@ -931,14 +931,23 @@
     return (str || "").replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_\-ก-๙]/g, "");
   }
 
+  // Shop name + order date portion, shared by every output file (and the zip
+  // name when multiple templates are selected).
   function buildBaseFilename() {
-    const orderLine = state.lines.find(l => l.role === "order");
     const shopLine = state.lines.find(l => l.role === "shop");
-    const order = safeFilenamePart(orderLine ? orderLine.value : "");
-    const name = safeFilenamePart(shopLine ? shopLine.value : "");
-    if (order && name) return `${order}_${name}`;
-    if (order || name) return order || name;
+    const dateLine = state.lines.find(l => l.role === "date");
+    const shop = safeFilenamePart(shopLine ? shopLine.value : "");
+    const date = safeFilenamePart(dateLine ? dateLine.value : "");
+    if (shop && date) return `${shop}_${date}`;
+    if (shop || date) return shop || date;
     return `watermarked_${new Date().toISOString().slice(0, 10)}`;
+  }
+
+  // Per-output filename: "{template name}_{shop name}_{order date}", always
+  // led by the template name so each output stays uniquely identifiable.
+  function buildOutputFilename(tpl, baseFilename) {
+    const tplName = safeFilenamePart(tpl.name.replace(/\.[^.]+$/, ""));
+    return tplName ? `${tplName}_${baseFilename}` : baseFilename;
   }
 
   el("cancelBtn").addEventListener("click", () => {
@@ -983,8 +992,8 @@
           const result = await Watermark.apply(srcCanvas, { text, ...settings });
           blob = await PdfHandler.canvasToBlob(result, format);
         }
-        const suffix = selected.length > 1 ? `_${safeFilenamePart(tpl.name.replace(/\.[^.]+$/, ""))}` : "";
-        outputs.push({ blob, filename: `${baseFilename}${suffix}.${format === "pdf" ? "pdf" : "jpg"}` });
+        const filenameBody = buildOutputFilename(tpl, baseFilename);
+        outputs.push({ blob, filename: `${filenameBody}.${format === "pdf" ? "pdf" : "jpg"}` });
       }
 
       if (outputs.length === 1) {
