@@ -7,6 +7,12 @@
 
   const el = (id) => document.getElementById(id);
 
+  const Icons = {
+    search: '<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+    close: '<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    settings: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.37 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15z"/></svg>'
+  };
+
   function defaultLines() {
     return [
       { id: "shop",    role: "shop",    label: "ชื่อร้านค้า/บริษัท",     value: "", type: "text" },
@@ -105,7 +111,7 @@
       name.textContent = tpl.name;
       const settingsBtn = document.createElement("button");
       settingsBtn.className = "settings-btn";
-      settingsBtn.textContent = "⚙";
+      settingsBtn.innerHTML = Icons.settings;
       settingsBtn.title = "Template settings";
       settingsBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -193,7 +199,7 @@
       if (line.role === "shop" || line.role === "license") {
         const searchBtn = document.createElement("button");
         searchBtn.className = "search-icon-btn";
-        searchBtn.textContent = "\u{1F50D}";
+        searchBtn.innerHTML = Icons.search;
         searchBtn.title = "Search customers";
         searchBtn.addEventListener("click", () => openCustomerSearch());
         row.appendChild(searchBtn);
@@ -201,7 +207,7 @@
 
       const delBtn = document.createElement("button");
       delBtn.className = "line-del";
-      delBtn.textContent = "×";
+      delBtn.innerHTML = Icons.close;
       delBtn.disabled = state.lines.length <= 1;
       delBtn.addEventListener("click", () => {
         if (state.lines.length <= 1) return;
@@ -341,7 +347,7 @@
       row.className = "customer-row";
       row.innerHTML = `
         <div><div class="c-name">${c.shopName}</div><div class="c-license">${c.licenseNumber}</div></div>
-        <div class="c-actions"><button class="del" title="Delete">×</button></div>
+        <div class="c-actions"><button class="del" title="Delete">${Icons.close}</button></div>
       `;
       row.querySelector(".del").addEventListener("click", async () => {
         const ok = await UI.confirmDialog(`Delete customer "${c.shopName}"?`);
@@ -448,15 +454,51 @@
     };
   }
 
-  function resetSettings() {
-    el("columns").value = 3; el("columnsOut").textContent = "3";
-    el("padding").value = 15; el("paddingOut").textContent = "15";
-    el("angle").value = 45; el("angleOut").textContent = "45";
-    el("opacity").value = 20; el("opacityOut").textContent = "20";
+  // ---------- Settings default (persisted) ----------
+
+  const SETTINGS_DEFAULT_KEY = "wm_settings_default";
+  const BUILTIN_SETTINGS_DEFAULT = { columns: 3, padding: 15, angle: 45, opacity: 20, style: "light", output: "pdf" };
+
+  function getSettingsDefault() {
+    try {
+      const raw = localStorage.getItem(SETTINGS_DEFAULT_KEY);
+      if (!raw) return BUILTIN_SETTINGS_DEFAULT;
+      const parsed = JSON.parse(raw);
+      return { ...BUILTIN_SETTINGS_DEFAULT, ...parsed };
+    } catch (e) {
+      return BUILTIN_SETTINGS_DEFAULT;
+    }
+  }
+
+  function applySettingsToControls(defaults) {
+    el("columns").value = defaults.columns; el("columnsOut").textContent = String(defaults.columns);
+    el("padding").value = defaults.padding; el("paddingOut").textContent = String(defaults.padding);
+    el("angle").value = defaults.angle; el("angleOut").textContent = String(defaults.angle);
+    el("opacity").value = defaults.opacity; el("opacityOut").textContent = String(defaults.opacity);
     document.querySelectorAll("#styleToggle .icon-seg").forEach(b => b.classList.remove("active"));
-    document.querySelector('#styleToggle .icon-seg[data-style="light"]').classList.add("active");
-    state.currentStyle = "light";
-    el("outputFormat").value = "pdf";
+    const styleBtn = document.querySelector(`#styleToggle .icon-seg[data-style="${defaults.style}"]`);
+    (styleBtn || document.querySelector('#styleToggle .icon-seg[data-style="light"]')).classList.add("active");
+    state.currentStyle = defaults.style;
+    el("outputFormat").value = defaults.output;
+  }
+
+  function saveCurrentSettingsAsDefault() {
+    const toSave = {
+      columns: parseInt(el("columns").value, 10),
+      padding: parseInt(el("padding").value, 10),
+      angle: parseInt(el("angle").value, 10),
+      opacity: parseInt(el("opacity").value, 10),
+      style: state.currentStyle,
+      output: el("outputFormat").value
+    };
+    localStorage.setItem(SETTINGS_DEFAULT_KEY, JSON.stringify(toSave));
+    setStatus("Default saved");
+  }
+
+  el("setDefaultBtn").addEventListener("click", saveCurrentSettingsAsDefault);
+
+  function resetSettings() {
+    applySettingsToControls(getSettingsDefault());
   }
 
   function setStatus(msg) { el("statusLine").textContent = msg || ""; }
@@ -496,6 +538,7 @@
       const tpl = selected[i];
       const slide = document.createElement("div");
       slide.className = "preview-slide";
+      slide.dataset.tplId = tpl.id;
       track.appendChild(slide);
       try {
         const srcCanvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 150);
@@ -525,6 +568,128 @@
       track.onscroll = null;
     }
   }
+
+  // ---------- Long-press zoom on preview slides ----------
+
+  let longPressTimer = null;
+  let longPressStart = null;
+  const LONG_PRESS_MS = 450;
+  const LONG_PRESS_MOVE_TOLERANCE = 10;
+
+  let zoomScale = 1, zoomPanX = 0, zoomPanY = 0;
+  const zoomPointers = new Map();
+  let pinchStartDist = 0, pinchStartScale = 1;
+
+  function resetZoomTransform() {
+    zoomScale = 1; zoomPanX = 0; zoomPanY = 0;
+    applyZoomTransform();
+  }
+  function applyZoomTransform() {
+    el("zoomImage").style.transform = `translate(${zoomPanX}px, ${zoomPanY}px) scale(${zoomScale})`;
+  }
+
+  function closeZoom() {
+    el("zoomOverlay").style.display = "none";
+  }
+
+  async function openZoom(slide) {
+    const canvas = slide.querySelector("canvas");
+    if (!canvas) return;
+    const img = el("zoomImage");
+    img.src = canvas.toDataURL("image/png");
+    resetZoomTransform();
+    el("zoomOverlay").style.display = "flex";
+
+    const tplId = slide.dataset.tplId;
+    const tpl = state.templates.find(t => String(t.id) === String(tplId));
+    if (!tpl) return;
+    try {
+      const text = buildWatermarkText();
+      const settings = readSettings();
+      const hiCanvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 400);
+      const hiResult = await Watermark.apply(hiCanvas, { text, ...settings });
+      if (el("zoomOverlay").style.display !== "none") {
+        img.src = hiResult.toDataURL("image/png");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  const previewTrackEl = el("previewTrack");
+
+  previewTrackEl.addEventListener("pointerdown", (e) => {
+    const slide = e.target.closest(".preview-slide");
+    if (!slide) return;
+    longPressStart = { x: e.clientX, y: e.clientY };
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(() => {
+      longPressTimer = null;
+      openZoom(slide);
+    }, LONG_PRESS_MS);
+  });
+  previewTrackEl.addEventListener("pointermove", (e) => {
+    if (longPressTimer === null || !longPressStart) return;
+    const dx = e.clientX - longPressStart.x;
+    const dy = e.clientY - longPressStart.y;
+    if (Math.sqrt(dx * dx + dy * dy) > LONG_PRESS_MOVE_TOLERANCE) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((evtName) => {
+    previewTrackEl.addEventListener(evtName, () => {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    });
+  });
+
+  el("zoomCloseBtn").addEventListener("click", closeZoom);
+  el("zoomOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "zoomOverlay" || e.target.id === "zoomViewport") closeZoom();
+  });
+
+  const zoomImgEl = el("zoomImage");
+  zoomImgEl.addEventListener("pointerdown", (e) => {
+    zoomPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    zoomImgEl.setPointerCapture(e.pointerId);
+    if (zoomPointers.size === 2) {
+      const pts = Array.from(zoomPointers.values());
+      pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      pinchStartScale = zoomScale;
+    }
+  });
+  zoomImgEl.addEventListener("pointermove", (e) => {
+    if (!zoomPointers.has(e.pointerId)) return;
+    const prev = zoomPointers.get(e.pointerId);
+    zoomPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (zoomPointers.size === 2) {
+      const pts = Array.from(zoomPointers.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      if (pinchStartDist > 0) {
+        zoomScale = Math.min(5, Math.max(1, pinchStartScale * (dist / pinchStartDist)));
+        applyZoomTransform();
+      }
+    } else if (zoomPointers.size === 1 && zoomScale > 1) {
+      zoomPanX += e.clientX - prev.x;
+      zoomPanY += e.clientY - prev.y;
+      applyZoomTransform();
+    }
+  });
+  function releaseZoomPointer(e) {
+    zoomPointers.delete(e.pointerId);
+    if (zoomPointers.size < 2) pinchStartDist = 0;
+  }
+  zoomImgEl.addEventListener("pointerup", releaseZoomPointer);
+  zoomImgEl.addEventListener("pointercancel", releaseZoomPointer);
+  zoomImgEl.addEventListener("dblclick", () => {
+    if (zoomScale > 1) {
+      resetZoomTransform();
+    } else {
+      zoomScale = 2.5;
+      applyZoomTransform();
+    }
+  });
 
   // ---------- Create / Export ----------
 
@@ -607,6 +772,7 @@
 
   // ---------- Init ----------
   async function init() {
+    applySettingsToControls(getSettingsDefault());
     renderLines();
     await refreshTemplates();
     await loadCustomers();
