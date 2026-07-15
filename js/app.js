@@ -51,9 +51,10 @@
   // ---------- Template library (Create picker + Setup manager) ----------
 
   const thumbCache = new Map();
+  const THUMB_MAX_IMAGE_DIM = 200;
   async function renderThumb(tpl) {
     if (thumbCache.has(tpl.id)) return thumbCache.get(tpl.id);
-    const canvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 40);
+    const canvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 40, THUMB_MAX_IMAGE_DIM);
     const url = canvas.toDataURL("image/jpeg", 0.7);
     thumbCache.set(tpl.id, url);
     return url;
@@ -124,31 +125,145 @@
     }
   }
 
+  // Downscale a large photo before storing it: if the longest edge exceeds
+  // maxDim, redraw it to a scaled canvas and re-encode as JPEG. Keeps
+  // IndexedDB storage lean and preview/export fast. Falls back to the
+  // original file on any decode error.
+  const IMPORT_MAX_IMAGE_DIM = 2000;
+  const IMPORT_JPEG_QUALITY = 0.9;
+
+  function loadImageFromFile(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    });
+  }
+
+  async function downscaleImageIfNeeded(file, maxDim = IMPORT_MAX_IMAGE_DIM, quality = IMPORT_JPEG_QUALITY) {
+    try {
+      const img = await loadImageFromFile(file);
+      const longest = Math.max(img.naturalWidth, img.naturalHeight);
+      if (longest <= maxDim) return file;
+      const scale = maxDim / longest;
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      const blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/jpeg", quality));
+      return blob || file;
+    } catch (err) {
+      console.warn("Image downscale failed, storing original:", err);
+      return file;
+    }
+  }
+
+  function setUploadStatus(msg) {
+    const line = el("templateUploadStatus");
+    line.textContent = msg || "";
+    line.style.display = msg ? "block" : "none";
+  }
+
   el("uploadBtn").addEventListener("click", () => el("fileInput").click());
   el("fileInput").addEventListener("change", async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       const isPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+      setUploadStatus(`Adding ${i + 1}/${files.length}: ${file.name}`);
+      const blob = isPdf ? file : await downscaleImageIfNeeded(file);
       await TemplateDB.addTemplate({
         name: file.name,
         type: isPdf ? "pdf" : "image",
-        blob: file
+        blob
       });
     }
     e.target.value = "";
+    setUploadStatus("");
     await refreshTemplates();
   });
 
-  // ---------- Template settings popup (rename / delete) ----------
+  // ---------- Template settings popup (rename / metadata / delete) ----------
 
   let activeTemplateForSettings = null;
 
-  function openTemplateSettings(tpl) {
+  function formatFileSize(bytes) {
+    if (!bytes && bytes !== 0) return "—";
+    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  function imageTypeLabel(blob, name) {
+    if (blob.type === "image/jpeg") return "JPEG";
+    if (blob.type === "image/png") return "PNG";
+    if (blob.type === "image/webp") return "WEBP";
+    const ext = (name.split(".").pop() || "").toUpperCase();
+    return ext || "Image";
+  }
+
+  // Computed on-demand from the stored blob (no DB migration needed).
+  async function computeTemplateMetadata(tpl) {
+    const blob = tpl.blob;
+    const size = formatFileSize(blob.size);
+    if (tpl.type === "pdf") {
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1 });
+        return {
+          type: `PDF · ${pdf.numPages} page${pdf.numPages === 1 ? "" : "s"}`,
+          dims: `${Math.round(viewport.width)} × ${Math.round(viewport.height)}`,
+          size
+        };
+      } catch (err) {
+        console.error(err);
+        return { type: "PDF", dims: "—", size };
+      }
+    } else {
+      try {
+        const img = await loadImageFromFile(blob);
+        return {
+          type: imageTypeLabel(blob, tpl.name),
+          dims: `${img.naturalWidth} × ${img.naturalHeight}`,
+          size
+        };
+      } catch (err) {
+        console.error(err);
+        return { type: imageTypeLabel(blob, tpl.name), dims: "—", size };
+      }
+    }
+  }
+
+  async function openTemplateSettings(tpl) {
     activeTemplateForSettings = tpl;
     el("templateNameInput").value = tpl.name;
+    el("templateMetaType").textContent = "…";
+    el("templateMetaDims").textContent = "…";
+    el("templateMetaSize").textContent = "…";
     UI.showOverlay("templateSettingsOverlay");
+
+    try {
+      const meta = await computeTemplateMetadata(tpl);
+      if (activeTemplateForSettings !== tpl) return; // popup moved on / closed
+      el("templateMetaType").textContent = meta.type;
+      el("templateMetaDims").textContent = meta.dims;
+      el("templateMetaSize").textContent = meta.size;
+    } catch (err) {
+      console.error(err);
+    }
   }
+
+  el("templateCloseBtn").addEventListener("click", () => UI.hideOverlay("templateSettingsOverlay"));
+  el("templateSettingsOverlay").addEventListener("click", (e) => {
+    if (e.target.id === "templateSettingsOverlay") UI.hideOverlay("templateSettingsOverlay");
+  });
 
   el("templateSaveBtn").addEventListener("click", async () => {
     if (!activeTemplateForSettings) return;

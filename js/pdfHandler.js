@@ -3,7 +3,9 @@
 const PdfHandler = (() => {
 
   // Render page 1 of a PDF blob (or an image blob) to an offscreen canvas.
-  async function loadAsCanvas(blob, type, targetDpi = 200) {
+  // maxImageDim (image branch only): if set, clamps the longest edge of the
+  // rendered canvas to this size (aspect-preserved) — used for cheap thumbnails.
+  async function loadAsCanvas(blob, type, targetDpi = 200, maxImageDim = null) {
     if (type === "pdf") {
       const arrayBuffer = await blob.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -19,11 +21,21 @@ const PdfHandler = (() => {
       return canvas;
     } else {
       const img = await blobToImage(blob);
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (maxImageDim) {
+        const longest = Math.max(w, h);
+        if (longest > maxImageDim) {
+          const scale = maxImageDim / longest;
+          w = Math.max(1, Math.round(w * scale));
+          h = Math.max(1, Math.round(h * scale));
+        }
+      }
       const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
+      canvas.width = w;
+      canvas.height = h;
       const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, w, h);
       return canvas;
     }
   }

@@ -488,10 +488,65 @@ main {
   padding: 20px;
   width: 100%;
   max-width: 340px;
+  position: relative;
+}
+.modal-card.has-close { padding-top: 46px; }
+.modal-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #eef1f5;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
 }
 .modal-message { font-size: 14px; margin: 0 0 16px; color: var(--text); }
 .modal-actions { display: flex; gap: 10px; }
 .modal-actions .btn { flex: 1; }
+.modal-actions-stacked { flex-direction: column; gap: 8px; }
+.modal-actions-stacked .btn { flex: none; }
+
+.field-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* --- Metadata rows (template settings popup) --- */
+.meta-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 12px;
+  margin-bottom: 16px;
+}
+.meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.meta-row:last-child { border-bottom: none; }
+.meta-label { font-size: 13px; color: var(--muted); flex: none; }
+.meta-value {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
 
 /* --- Zoom overlay (long-press preview) --- */
 .zoom-overlay {
