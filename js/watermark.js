@@ -57,15 +57,11 @@ const Watermark = (() => {
     ctx.closePath();
   }
 
-  // Build just the rotated watermark tiling, positioned for a W×H page.
-  // Returns { rotatedCanvas, pasteX, pasteY } — no source, no opacity applied.
-  async function buildRotatedOverlay(W, H, opts) {
-    const { text, columns, paddingRatio, angleDeg, style } = opts;
+  // Draw one tile (rounded rect bg + border + centered multiline text), auto
+  // font-sized so the tile's box width matches targetBoxWidth. Shared by the
+  // tiled and single-placement paths below.
+  async function buildTile(text, targetBoxWidth, style) {
     const preset = STYLE_PRESETS[style] || STYLE_PRESETS.light;
-
-    const totalColumnRatio = columns * (1 + paddingRatio);
-    const targetBoxWidth = totalColumnRatio > 0 ? W / totalColumnRatio : W;
-
     const measureCanvas = document.createElement("canvas");
     const mctx = measureCanvas.getContext("2d");
 
@@ -108,6 +104,19 @@ const Watermark = (() => {
     tctx.restore();
     drawMultilineCentered(tctx, lines, font, preset.text, boxWidth / 2, boxHeight / 2, measure.lineHeight);
 
+    return { tileCanvas, boxWidth, boxHeight };
+  }
+
+  // Build the rotated, tiled watermark pattern for a W×H page (mode: "tiled").
+  // Returns { rotatedCanvas, pasteX, pasteY } — no source, no opacity applied.
+  async function buildRotatedOverlay(W, H, opts) {
+    const { text, columns, paddingRatio, angleDeg, style } = opts;
+
+    const totalColumnRatio = columns * (1 + paddingRatio);
+    const targetBoxWidth = totalColumnRatio > 0 ? W / totalColumnRatio : W;
+
+    const { tileCanvas, boxWidth, boxHeight } = await buildTile(text, targetBoxWidth, style);
+
     // Step 4: tile across a canvas big enough to cover the rotated bounds.
     const angleRad = angleDeg * Math.PI / 180;
     const cosA = Math.abs(Math.cos(angleRad));
@@ -146,11 +155,62 @@ const Watermark = (() => {
     return { rotatedCanvas, pasteX, pasteY };
   }
 
+  // Anchor a w×h box within a W×H page at one of the 9 grid positions, with
+  // a small margin from the page edges for every anchor except center.
+  function anchorPosition(position, W, H, w, h, margin) {
+    let x, y;
+    switch (position) {
+      case "top-left": x = margin; y = margin; break;
+      case "top-center": x = (W - w) / 2; y = margin; break;
+      case "top-right": x = W - w - margin; y = margin; break;
+      case "middle-left": x = margin; y = (H - h) / 2; break;
+      case "middle-right": x = W - w - margin; y = (H - h) / 2; break;
+      case "bottom-left": x = margin; y = H - h - margin; break;
+      case "bottom-center": x = (W - w) / 2; y = H - h - margin; break;
+      case "bottom-right": x = W - w - margin; y = H - h - margin; break;
+      case "center":
+      default:
+        x = (W - w) / 2; y = (H - h) / 2;
+    }
+    return { pasteX: x, pasteY: y };
+  }
+
+  // Build a single rotated watermark stamp for a W×H page (mode: "single"),
+  // sized to ~opts.size% of the page width and placed at opts.position.
+  async function buildSingleOverlay(W, H, opts) {
+    const { text, size, angleDeg, style, position } = opts;
+    const targetBoxWidth = W * ((size || 40) / 100);
+    const { tileCanvas, boxWidth, boxHeight } = await buildTile(text, targetBoxWidth, style);
+
+    const angleRad = angleDeg * Math.PI / 180;
+    const cosA = Math.abs(Math.cos(angleRad));
+    const sinA = Math.abs(Math.sin(angleRad));
+    const rotW = Math.ceil(boxWidth * cosA + boxHeight * sinA);
+    const rotH = Math.ceil(boxHeight * cosA + boxWidth * sinA);
+    const rotatedCanvas = document.createElement("canvas");
+    rotatedCanvas.width = rotW;
+    rotatedCanvas.height = rotH;
+    const rotCtx = rotatedCanvas.getContext("2d");
+    rotCtx.translate(rotW / 2, rotH / 2);
+    rotCtx.rotate(angleRad);
+    rotCtx.drawImage(tileCanvas, -boxWidth / 2, -boxHeight / 2);
+
+    const margin = Math.round(Math.min(W, H) * 0.04);
+    const { pasteX, pasteY } = anchorPosition(position || "center", W, H, rotW, rotH, margin);
+    return { rotatedCanvas, pasteX, pasteY };
+  }
+
+  // Dispatches to the tiled or single-placement builder based on opts.mode
+  // (defaults to tiled when unset, preserving prior behavior).
+  function buildOverlayForMode(W, H, opts) {
+    return opts.mode === "single" ? buildSingleOverlay(W, H, opts) : buildRotatedOverlay(W, H, opts);
+  }
+
   // Composite the watermark over an existing source canvas (image path / preview).
   async function apply(sourceCanvas, opts) {
     const W = sourceCanvas.width;
     const H = sourceCanvas.height;
-    const { rotatedCanvas, pasteX, pasteY } = await buildRotatedOverlay(W, H, opts);
+    const { rotatedCanvas, pasteX, pasteY } = await buildOverlayForMode(W, H, opts);
 
     const outCanvas = document.createElement("canvas");
     outCanvas.width = W;
@@ -167,7 +227,7 @@ const Watermark = (() => {
   // Build a transparent W×H overlay (opacity baked in) for compositing onto a
   // vector PDF page as a PNG. No source drawn.
   async function buildOverlay(W, H, opts) {
-    const { rotatedCanvas, pasteX, pasteY } = await buildRotatedOverlay(W, H, opts);
+    const { rotatedCanvas, pasteX, pasteY } = await buildOverlayForMode(W, H, opts);
     const canvas = document.createElement("canvas");
     canvas.width = W;
     canvas.height = H;

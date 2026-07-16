@@ -1,4 +1,4 @@
-<!-- app version 2026.07.15.5 -->
+<!-- app version 2026.07.15.9 -->
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -7,15 +7,21 @@
 <title>Add Watermark</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1f6feb">
-<meta name="app-version" content="2026.07.15.5">
+<meta name="app-version" content="2026.07.15.9">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;600;700&display=swap">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=2026.07.15.9">
 </head>
 <body>
 
 <header class="topbar">
-  <h1>Add Watermark</h1>
-  <span class="app-version" id="appVersion"></span>
+  <div class="topbar-left">
+    <h1>Add Watermark</h1>
+    <span class="app-version" id="appVersion"></span>
+  </div>
+  <nav class="top-tabs">
+    <button class="nav-btn top-tab-btn active" data-nav="create"><span class="top-tab-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5.5-5.5a2 2 0 0 0-2.8 0L4 19"/></svg></span>Create</button>
+    <button class="nav-btn top-tab-btn" data-nav="setup"><span class="top-tab-icon"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.37 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15z"/></svg></span>Setup</button>
+  </nav>
 </header>
 
 <main>
@@ -23,6 +29,7 @@
 <!-- ============ CREATE PAGE ============ -->
 <div id="pageCreate" class="page active">
 
+  <div class="create-zone-inputs">
   <section class="card">
     <div class="card-header">
       <h2>Templates</h2>
@@ -34,78 +41,123 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class="card watermark-text-card">
     <div class="card-header">
       <h2>Watermark Text</h2>
-      <button id="defaultLinesBtn" class="btn btn-small btn-ghost">Default</button>
+      <button id="defaultLinesBtn" class="btn btn-small btn-ghost">Reset text</button>
     </div>
-    <div id="linesContainer"></div>
+    <div id="linesContainer" class="lines-scroll"></div>
     <button id="addLineBtn" class="btn btn-secondary btn-full">+ Add line</button>
   </section>
+  </div>
 
-  <!-- Preview + Settings unit: preview on top, live-updating settings below -->
-  <section class="card preview-settings-unit">
+  <div class="create-zone-preview">
+  <section class="card preview-card">
     <div id="previewWrap" class="preview-wrap">
       <div id="previewTrack" class="preview-track"></div>
       <p id="previewHint" class="empty-hint">Select a template to see a live preview.</p>
     </div>
     <div id="previewDots" class="preview-dots"></div>
+  </section>
+  </div>
 
+  <div class="create-zone-settings">
+  <section class="card settings-card">
     <div class="compact-settings">
       <div class="compact-row">
+        <span class="compact-label">Pattern</span>
+        <div class="compact-track">
+          <div class="icon-toggle" id="patternToggle">
+            <button type="button" data-mode="tiled" class="icon-seg active" title="Tiled">Tiled</button>
+            <button type="button" data-mode="single" class="icon-seg" title="Single">Single</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="compact-row mode-row mode-tiled" id="columnsRow">
         <span class="compact-label">Columns</span>
         <span class="compact-value" id="columnsOut">3</span>
-        <input type="range" id="columns" min="1" max="8" value="3">
+        <input type="range" id="columns" min="1" max="8" step="1" value="3">
       </div>
-      <div class="compact-row">
+      <div class="compact-row mode-row mode-tiled" id="paddingRow">
         <span class="compact-label">Padding</span>
-        <span class="compact-value"><span id="paddingOut">15</span>%</span>
-        <input type="range" id="padding" min="0" max="60" value="15">
+        <span class="compact-value"><span id="paddingOut">10</span>%</span>
+        <input type="range" id="padding" min="0" max="60" step="10" value="10">
       </div>
+
+      <div class="compact-row mode-row mode-single" id="positionRow" style="display:none">
+        <span class="compact-label">Position</span>
+        <div class="compact-track">
+          <div class="position-grid" id="positionGrid">
+            <button type="button" class="pos-btn" data-position="top-left" aria-label="Top left"></button>
+            <button type="button" class="pos-btn" data-position="top-center" aria-label="Top center"></button>
+            <button type="button" class="pos-btn" data-position="top-right" aria-label="Top right"></button>
+            <button type="button" class="pos-btn" data-position="middle-left" aria-label="Middle left"></button>
+            <button type="button" class="pos-btn active" data-position="center" aria-label="Center"></button>
+            <button type="button" class="pos-btn" data-position="middle-right" aria-label="Middle right"></button>
+            <button type="button" class="pos-btn" data-position="bottom-left" aria-label="Bottom left"></button>
+            <button type="button" class="pos-btn" data-position="bottom-center" aria-label="Bottom center"></button>
+            <button type="button" class="pos-btn" data-position="bottom-right" aria-label="Bottom right"></button>
+          </div>
+        </div>
+      </div>
+      <div class="compact-row mode-row mode-single" id="sizeRow" style="display:none">
+        <span class="compact-label">Size</span>
+        <span class="compact-value"><span id="sizeOut">40</span>%</span>
+        <input type="range" id="size" min="10" max="90" step="5" value="40">
+      </div>
+
       <div class="compact-row">
         <span class="compact-label">Angle</span>
         <span class="compact-value"><span id="angleOut">45</span>°</span>
-        <input type="range" id="angle" min="0" max="90" value="45">
+        <input type="range" id="angle" min="0" max="90" step="15" value="45">
       </div>
       <div class="compact-row">
         <span class="compact-label">Opacity</span>
         <span class="compact-value"><span id="opacityOut">20</span>%</span>
-        <input type="range" id="opacity" min="5" max="100" value="20">
+        <input type="range" id="opacity" min="10" max="100" step="10" value="20">
       </div>
-      <div class="settings-columns">
-        <div class="settings-col">
-          <span class="settings-col-label">Style</span>
-          <div class="icon-toggle" id="styleToggle">
-            <button data-style="light" class="icon-seg active" title="Light" aria-label="Light"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
-            <button data-style="dark" class="icon-seg" title="Dark" aria-label="Dark"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
-          </div>
+    </div>
+
+    <div class="settings-default-block">
+      <div class="settings-default-row">
+        <span class="settings-col-label">Style</span>
+        <div class="icon-toggle" id="styleToggle">
+          <button type="button" data-style="light" class="icon-seg active" title="Light" aria-label="Light"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+          <button type="button" data-style="dark" class="icon-seg" title="Dark" aria-label="Dark"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
         </div>
-        <div class="settings-col">
-          <span class="settings-col-label">Output type</span>
-          <select id="outputFormat">
-            <option value="pdf">PDF</option>
-            <option value="jpg">JPG</option>
-          </select>
-        </div>
-        <div class="settings-col">
-          <span class="settings-col-label">Default</span>
-          <button id="setDefaultBtn" class="set-default-btn" title="Set as default" aria-label="Set as default"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg><span>Save</span></button>
-        </div>
+      </div>
+      <div class="settings-default-row">
+        <span class="settings-col-label">Output type</span>
+        <select id="outputFormat">
+          <option value="pdf">PDF</option>
+          <option value="jpg">JPG</option>
+        </select>
+      </div>
+      <div class="settings-default-row settings-default-label-row">
+        <span class="settings-col-label">Setting Default</span>
+        <span id="modifiedTag" class="modified-tag" style="display:none">Modified</span>
+      </div>
+      <div class="settings-default-buttons">
+        <button id="setDefaultBtn" class="btn btn-secondary settings-default-btn" title="Set as default" aria-label="Set as default"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg><span>Set Default</span></button>
+        <button id="resetDefaultBtn" class="btn btn-secondary settings-default-btn" title="Reset to default" aria-label="Reset to default"><svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 1 2.6 6.4"/><path d="M3 21v-6h6"/></svg><span>Reset</span></button>
       </div>
     </div>
   </section>
 
   <div class="action-bar">
-    <button id="cancelBtn" class="btn btn-secondary">Cancel</button>
+    <button id="cancelBtn" class="btn btn-secondary">Clear all</button>
     <button id="createBtn" class="btn btn-primary">Create File(s)</button>
   </div>
 
   <p id="statusLine" class="status-line"></p>
+  </div>
 </div>
 
 <!-- ============ SETUP PAGE ============ -->
 <div id="pageSetup" class="page">
 
+  <div class="setup-col-left">
   <section class="card">
     <div class="card-header">
       <h2>Templates</h2>
@@ -117,13 +169,23 @@
       <p class="empty-hint">No templates yet. Tap "+ Upload" to add PDF or image templates. They'll stay saved on this device.</p>
     </div>
   </section>
+  </div>
 
+  <div class="setup-col-right">
   <section class="card">
     <div class="card-header">
       <h2>Customers</h2>
       <button id="importCustomersBtn" class="btn btn-small">Import customers</button>
       <input type="file" id="bulkFileInput" accept=".csv,.xlsx,.xls" hidden>
     </div>
+
+    <div class="add-customer-row">
+      <input type="text" id="addCustomerName" class="line-value add-customer-input" placeholder="Customer name">
+      <input type="text" id="addCustomerLicense" class="line-value add-customer-input" placeholder="Registration no.">
+      <button id="addCustomerBtn" class="btn btn-secondary add-customer-btn">+ Add</button>
+    </div>
+    <p id="addCustomerHint" class="error-line" style="display:none"></p>
+
     <input type="text" id="customerListSearch" placeholder="Search customers" class="field-value" style="margin-bottom:10px">
     <div id="customerImportSummary" class="import-summary" style="display:none"></div>
     <div id="conflictReview" class="conflict-review" style="display:none"></div>
@@ -131,6 +193,7 @@
       <p class="empty-hint">No customers saved yet.</p>
     </div>
   </section>
+  </div>
 
 </div>
 
@@ -229,11 +292,11 @@
 <script>
   pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 </script>
-<script src="js/db.js"></script>
-<script src="js/customerImport.js"></script>
-<script src="js/pdfHandler.js"></script>
-<script src="js/watermark.js"></script>
-<script src="js/ui.js"></script>
-<script src="js/app.js"></script>
+<script src="js/db.js?v=2026.07.15.9"></script>
+<script src="js/customerImport.js?v=2026.07.15.9"></script>
+<script src="js/pdfHandler.js?v=2026.07.15.9"></script>
+<script src="js/watermark.js?v=2026.07.15.9"></script>
+<script src="js/ui.js?v=2026.07.15.9"></script>
+<script src="js/app.js?v=2026.07.15.9"></script>
 </body>
 </html>

@@ -30,12 +30,12 @@ input, select, button, textarea {
 .topbar {
   background: var(--accent);
   color: #fff;
-  padding: 16px 20px;
+  padding: 8px 20px;
   position: sticky;
   top: 0;
   z-index: 10;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
@@ -226,6 +226,43 @@ main {
   background: #fafbfc;
 }
 .template-item.selected { border-color: var(--accent); background: #eaf2ff; }
+
+/* --- Multi-page thumbnail cue: a single offset "page edge" peeking out
+   behind the front page, plus a page-count badge. Binary stack — a 3-page
+   and a 10-page template look identical (always just one page behind); the
+   real count is shown in the badge, not in the stack depth. --- */
+.thumb-wrap { position: relative; }
+.thumb-peek {
+  position: absolute;
+  inset: 0;
+  background: #ddd;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transform: translate(5px, 5px);
+  z-index: 0;
+}
+.thumb-wrap .thumb {
+  position: relative;
+  z-index: 1;
+}
+.page-badge {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 8px;
+}
+.page-badge .icon { width: 10px; height: 10px; }
+
 .template-item .thumb {
   width: 100%;
   height: 130px;
@@ -287,6 +324,7 @@ main {
   min-height: 260px;
 }
 .preview-slide {
+  position: relative;
   flex: 0 0 100%;
   min-height: 260px;
   scroll-snap-align: center;
@@ -295,8 +333,52 @@ main {
   justify-content: center;
   padding: 8px;
 }
-.preview-slide canvas { max-width: 100%; height: auto; border-radius: 6px; }
+.preview-slide canvas { max-width: 100%; max-height: 100%; width: auto; height: auto; border-radius: 6px; }
 .preview-wrap .empty-hint { color: var(--muted); position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); }
+
+/* --- Preview page navigation (multi-page templates only). Chevrons on the
+   sides flip pages within the current template; the pill shows "Page X / N".
+   This is separate from the template dots below the preview, which switch
+   between selected templates. --- */
+.page-nav {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  pointer-events: none;
+}
+.page-nav-btn {
+  pointer-events: auto;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.page-nav-btn:disabled { opacity: 0.3; cursor: default; }
+.page-nav-btn .icon { width: 18px; height: 18px; }
+.page-counter {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
 
 .preview-dots {
   display: flex;
@@ -334,6 +416,27 @@ main {
   text-align: right;
 }
 .compact-row input[type=range] { flex: 1; min-width: 0; }
+.compact-track { flex: 1; min-width: 0; display: flex; align-items: center; }
+
+/* --- Position: 3x3 anchor grid, centered in the same track band the
+   sliders occupy (label stays in the fixed-width label column). --- */
+.position-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  grid-template-rows: repeat(3, 22px);
+  gap: 4px;
+  margin: 0 auto;
+}
+.pos-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+.pos-btn.active { background: var(--accent); border-color: var(--accent); }
 
 /* --- Thin line sliders with a bold blue fill --- */
 input[type=range] {
@@ -380,31 +483,13 @@ input[type=range]::-moz-range-thumb {
   cursor: pointer;
 }
 
-/* --- Style / Output type / Default: 3 equal columns --- */
-.settings-columns {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 4px;
-}
-.settings-col {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
+/* --- Pattern / Style toggles (shared look) --- */
 .settings-col-label {
   font-size: 11px;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.02em;
   white-space: nowrap;
-}
-.settings-col .icon-toggle,
-.settings-col select,
-.settings-col .set-default-btn {
-  height: 38px;
-  width: 100%;
 }
 .icon-toggle {
   display: inline-flex;
@@ -413,8 +498,6 @@ input[type=range]::-moz-range-thumb {
   overflow: hidden;
   flex: none;
 }
-.settings-col .icon-toggle { display: flex; }
-.settings-col .icon-toggle .icon-seg { flex: 1; justify-content: center; }
 .icon-seg {
   border: none;
   background: transparent;
@@ -422,11 +505,38 @@ input[type=range]::-moz-range-thumb {
   line-height: 1;
   cursor: pointer;
   color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
   display: inline-flex;
   align-items: center;
 }
 .icon-seg.active { background: var(--text); color: #fff; }
-.settings-col select {
+
+/* --- Setting Default block: Style / Output type rows, then the
+   Setting-Default row with a Modified tag and Set-Default/Reset buttons. --- */
+.settings-default-block {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-default-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.settings-default-row .icon-toggle,
+.settings-default-row select {
+  flex: none;
+  min-width: 140px;
+  height: 36px;
+}
+.settings-default-row .icon-toggle .icon-seg { flex: 1; justify-content: center; }
+.settings-default-row select {
   padding: 0 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -434,22 +544,30 @@ input[type=range]::-moz-range-thumb {
   background: #fff;
   color: var(--text);
 }
-.set-default-btn {
-  border: 1px solid var(--border);
+.settings-default-label-row { margin-top: 2px; }
+.modified-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent-dark);
+  background: #eaf2ff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.settings-default-buttons { display: flex; gap: 10px; }
+.settings-default-btn {
+  flex: 1;
+  justify-content: center;
   background: #eef1f5;
   color: var(--text);
-  border-radius: 8px;
-  padding: 8px 10px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  font-family: inherit;
+  border: 1px solid var(--border);
 }
-.set-default-btn:active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.settings-default-btn.emphasized {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
 
 /* --- Suggestion / search list (shared by inline popover + modal) --- */
 .suggestions {
@@ -668,4 +786,227 @@ input[type=range]::-moz-range-thumb {
   transform-origin: center center;
   will-change: transform;
   border-radius: 4px;
+}
+
+/* --- Topbar groups: title+version on the left, nav on the right.
+   Top tabs are hidden on mobile (bottom nav is used instead) and shown
+   at the desktop breakpoint below. --- */
+.topbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.top-tabs {
+  display: none;
+  flex: none;
+  gap: 4px;
+}
+.top-tab-btn {
+  flex: none;
+  flex-direction: row;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: rgba(255,255,255,0.75);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 4px 4px 6px;
+  gap: 6px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.top-tab-btn.active { color: #fff; border-bottom-color: #fff; }
+.top-tab-icon { display: inline-flex; }
+.top-tab-icon .icon { width: 16px; height: 16px; }
+
+/* --- Create page: three zone wrappers (CSS reflow only, no markup
+   duplication). Below the desktop breakpoint these wrappers must be
+   layout-neutral so the mobile single-column order is unchanged
+   (Templates -> Watermark Text -> preview -> settings -> actions). --- */
+.create-zone-inputs, .create-zone-preview, .create-zone-settings { display: contents; }
+
+/* --- Setup page: two column wrappers, same layout-neutral rule on
+   mobile. --- */
+.setup-col-left, .setup-col-right { display: contents; }
+
+/* --- Manual add-customer quick form --- */
+.add-customer-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.add-customer-input {
+  flex: 1;
+  min-width: 0;
+}
+.add-customer-btn { flex: none; }
+
+/* =====================================================================
+   Desktop (landscape) layout — viewport-based only, no UA sniffing.
+   Below 900px everything above this point governs the mobile layout
+   unchanged. At >=900px we reflow the SAME markup: nav becomes top
+   tabs on the topbar (bottom nav hidden), the Create page becomes a
+   two-column grid (controls left / large preview right), the Setup
+   page becomes a two-column grid (Templates left / Customers right),
+   and template rows become wrapping grids instead of horizontal
+   scroll.
+   ===================================================================== */
+@media (min-width: 900px) {
+  body { padding-bottom: 0; }
+
+  .top-tabs { display: flex; }
+  .bottom-nav { display: none; }
+
+  .topbar {
+    height: 48px;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  main {
+    max-width: none;
+    padding: 16px 24px;
+    height: calc(100vh - 48px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .page.active { height: 100%; min-height: 0; }
+
+  /* --- Create page: three-column grid, equal sides with a dominant
+     center preview column. The whole page fits the viewport height with
+     no page scroll — only the template grid and the watermark-text list
+     scroll internally (below). --- */
+  #pageCreate.page.active {
+    display: grid;
+    grid-template-columns: 1fr 1.8fr 1fr;
+    gap: 16px;
+    align-items: stretch;
+  }
+  .create-zone-inputs, .create-zone-preview, .create-zone-settings {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    height: 100%;
+  }
+  .create-zone-inputs { overflow: hidden; }
+  .create-zone-preview { justify-content: center; align-items: center; overflow: hidden; }
+  .create-zone-settings { overflow: hidden; }
+
+  /* Templates card: wrapping grid capped at ~3 rows tall with internal
+     scroll, so a long template list never pushes the Watermark Text card
+     or the preview off-screen. */
+  #pageCreate.page.active .template-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 8px;
+    overflow-x: visible;
+    overflow-y: auto;
+    max-height: calc((110px * 1.35 + 8px) * 3);
+    padding-bottom: 0;
+  }
+  #pageCreate.page.active .template-item {
+    width: auto;
+    min-width: 0;
+    flex: none;
+  }
+
+  /* Watermark Text card: fixed header/button, scrollable line list so a
+     long list of lines never grows the page. */
+  .watermark-text-card {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+  }
+  .watermark-text-card .lines-scroll {
+    flex: 1;
+    min-height: 60px;
+    overflow-y: auto;
+  }
+
+  /* Preview: locked to A4 portrait, sized to the available height of the
+     center column, centered, shrinking on short screens (never forces
+     page scroll). */
+  .preview-card {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .preview-wrap {
+    flex: none;
+    align-self: center;
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+    aspect-ratio: 1 / 1.414;
+    min-height: 0;
+    margin: 0;
+  }
+  .preview-track { height: 100%; min-height: 0; }
+  .preview-slide { min-height: 0; height: 100%; }
+
+  /* Settings zone: sliders + settings-default block scroll internally if
+     needed on a short screen; the action bar + status line stay pinned
+     at the bottom of the column. */
+  .settings-card {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .create-zone-settings .action-bar,
+  .create-zone-settings .status-line {
+    flex: none;
+  }
+
+  /* --- Setup page: two-column grid. Left = Templates management,
+     right = Customers (search, add-customer form, list). --- */
+  #pageSetup.page.active {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  .setup-col-left, .setup-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Templates management on Setup: wrapping grid, no forced row cap —
+     it's the primary content here and may grow taller than Create's. */
+  #pageSetup.page.active .template-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+    overflow-x: visible;
+    padding-bottom: 0;
+  }
+  #pageSetup.page.active .template-item {
+    width: auto;
+    min-width: 0;
+    flex: none;
+  }
+
+  /* Add-customer quick form: name, reg no. and + Add on one row. */
+  .add-customer-row {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 14px;
+  }
+  .add-customer-btn { padding: 10px 18px; }
+}
+
+/* --- Mouse zoom affordance on pointer:fine devices (does not assume
+   desktop == mouse; touch-only devices keep the default cursor). --- */
+@media (hover: hover) and (pointer: fine) {
+  .preview-slide { cursor: zoom-in; }
 }

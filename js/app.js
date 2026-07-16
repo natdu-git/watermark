@@ -10,7 +10,10 @@
   const Icons = {
     search: '<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
     close: '<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-    settings: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.37 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15z"/></svg>'
+    settings: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.63 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.63a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.37 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15z"/></svg>',
+    pages: '<svg class="icon icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h8l4 4v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M15 3v4a1 1 0 0 0 1 1h4"/></svg>',
+    chevronLeft: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+    chevronRight: '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>'
   };
 
   function defaultLines() {
@@ -53,16 +56,24 @@
   const thumbCache = new Map();
   const THUMB_MAX_IMAGE_DIM = 200;
 
-  // Decoded preview-resolution source canvas per template id, so dragging a
-  // settings slider re-runs Watermark.apply() on an already-decoded canvas
-  // instead of re-rendering the PDF/image from scratch every time.
+  // Decoded preview-resolution source canvas per template id + page number,
+  // so dragging a settings slider or flipping a page re-runs Watermark.apply()
+  // on an already-decoded canvas instead of re-rendering the PDF/image from
+  // scratch every time. Key format: "<tplId>:<page>".
   const PREVIEW_SOURCE_DPI = 150;
   const previewSourceCache = new Map();
-  async function getPreviewSourceCanvas(tpl) {
-    if (previewSourceCache.has(tpl.id)) return previewSourceCache.get(tpl.id);
-    const canvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, PREVIEW_SOURCE_DPI);
-    previewSourceCache.set(tpl.id, canvas);
+  async function getPreviewSourceCanvas(tpl, page = 1) {
+    const key = `${tpl.id}:${page}`;
+    if (previewSourceCache.has(key)) return previewSourceCache.get(key);
+    const canvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, PREVIEW_SOURCE_DPI, null, page);
+    previewSourceCache.set(key, canvas);
     return canvas;
+  }
+  function invalidatePreviewSourceCache(tplId) {
+    const prefix = `${tplId}:`;
+    for (const key of previewSourceCache.keys()) {
+      if (key === tplId || key.startsWith(prefix)) previewSourceCache.delete(key);
+    }
   }
   async function renderThumb(tpl) {
     if (thumbCache.has(tpl.id)) return thumbCache.get(tpl.id);
@@ -70,6 +81,48 @@
     const url = canvas.toDataURL("image/jpeg", 0.7);
     thumbCache.set(tpl.id, url);
     return url;
+  }
+
+  // Page count per template id (1 for images, real pdf.js page count for
+  // PDFs), computed once and cached so switching pages/rendering thumbnails
+  // doesn't re-decode the document just to know how many pages it has.
+  const pageCountCache = new Map();
+  async function getPageCount(tpl) {
+    if (pageCountCache.has(tpl.id)) return pageCountCache.get(tpl.id);
+    let count = 1;
+    try {
+      count = await PdfHandler.getPageCount(tpl.blob, tpl.type);
+    } catch (err) {
+      console.error(err);
+    }
+    pageCountCache.set(tpl.id, count);
+    return count;
+  }
+
+  // Builds the thumbnail element for a template: a flat single card for a
+  // single-page template, or a front page with one offset "page edge"
+  // peeking out behind (always exactly one, regardless of real page count)
+  // plus a badge showing the real count, for multi-page templates.
+  function buildThumbWrap(tpl) {
+    const wrap = document.createElement("div");
+    wrap.className = "thumb-wrap";
+    const thumb = document.createElement("img");
+    thumb.className = "thumb";
+    renderThumb(tpl).then(src => { thumb.src = src; }).catch(() => {});
+    wrap.appendChild(thumb);
+
+    getPageCount(tpl).then((count) => {
+      if (count <= 1) return;
+      const peek = document.createElement("div");
+      peek.className = "thumb-peek";
+      wrap.insertBefore(peek, thumb);
+      const badge = document.createElement("span");
+      badge.className = "page-badge";
+      badge.innerHTML = `${Icons.pages}<span>${count}</span>`;
+      wrap.appendChild(badge);
+    }).catch(() => {});
+
+    return wrap;
   }
 
   async function refreshTemplates() {
@@ -88,13 +141,11 @@
     for (const tpl of state.templates) {
       const item = document.createElement("div");
       item.className = "template-item" + (state.selectedTemplateIds.has(tpl.id) ? " selected" : "");
-      const thumb = document.createElement("img");
-      thumb.className = "thumb";
-      renderThumb(tpl).then(src => { thumb.src = src; }).catch(() => {});
+      const thumbWrap = buildThumbWrap(tpl);
       const name = document.createElement("div");
       name.className = "name";
       name.textContent = tpl.name;
-      item.appendChild(thumb);
+      item.appendChild(thumbWrap);
       item.appendChild(name);
       item.addEventListener("click", () => {
         if (state.selectedTemplateIds.has(tpl.id)) state.selectedTemplateIds.delete(tpl.id);
@@ -116,9 +167,7 @@
     for (const tpl of state.templates) {
       const item = document.createElement("div");
       item.className = "template-item";
-      const thumb = document.createElement("img");
-      thumb.className = "thumb";
-      renderThumb(tpl).then(src => { thumb.src = src; }).catch(() => {});
+      const thumbWrap = buildThumbWrap(tpl);
       const name = document.createElement("div");
       name.className = "name";
       name.textContent = tpl.name;
@@ -130,7 +179,7 @@
         e.stopPropagation();
         openTemplateSettings(tpl);
       });
-      item.appendChild(thumb);
+      item.appendChild(thumbWrap);
       item.appendChild(name);
       item.appendChild(settingsBtn);
       container.appendChild(item);
@@ -295,7 +344,9 @@
     await TemplateDB.deleteTemplate(activeTemplateForSettings.id);
     state.selectedTemplateIds.delete(activeTemplateForSettings.id);
     thumbCache.delete(activeTemplateForSettings.id);
-    previewSourceCache.delete(activeTemplateForSettings.id);
+    pageCountCache.delete(activeTemplateForSettings.id);
+    invalidatePreviewSourceCache(activeTemplateForSettings.id);
+    previewPageIndex.delete(activeTemplateForSettings.id);
     await refreshTemplates();
     schedulePreview();
   });
@@ -489,6 +540,38 @@
 
   el("customerListSearch").addEventListener("input", refreshCustomerList);
 
+  // ---------- Manual "Add customer" quick form ----------
+
+  function setAddCustomerHint(msg) {
+    const hint = el("addCustomerHint");
+    hint.textContent = msg || "";
+    hint.style.display = msg ? "block" : "none";
+  }
+
+  el("addCustomerBtn").addEventListener("click", async () => {
+    const nameInput = el("addCustomerName");
+    const licenseInput = el("addCustomerLicense");
+    const shopName = nameInput.value.trim();
+    const licenseNumber = licenseInput.value.trim();
+
+    if (!shopName || !licenseNumber) {
+      setAddCustomerHint("Enter both customer name and registration no.");
+      return;
+    }
+
+    const existing = await CustomerDB.findDuplicate(shopName, licenseNumber);
+    if (existing) {
+      setAddCustomerHint("Customer already exists");
+      return;
+    }
+
+    await CustomerDB.add({ shopName, licenseNumber });
+    setAddCustomerHint("");
+    nameInput.value = "";
+    licenseInput.value = "";
+    await refreshCustomerList();
+  });
+
   // ---------- Bulk import (guided "Import customers" popup) ----------
 
   el("importCustomersBtn").addEventListener("click", () => UI.showOverlay("importCustomersOverlay"));
@@ -564,7 +647,7 @@
 
   // ---------- Settings ----------
 
-  const SETTINGS_SLIDER_IDS = ["columns", "padding", "angle", "opacity"];
+  const SETTINGS_SLIDER_IDS = ["columns", "padding", "angle", "opacity", "size"];
 
   // Cross-browser fill: WebKit doesn't fill the lower portion of a range
   // input natively, so we compute the value's position as a percentage and
@@ -578,7 +661,7 @@
     slider.style.setProperty("--range-progress", `${pct}%`);
   }
 
-  [["columns", "columnsOut"], ["padding", "paddingOut"], ["angle", "angleOut"], ["opacity", "opacityOut"]]
+  [["columns", "columnsOut"], ["padding", "paddingOut"], ["angle", "angleOut"], ["opacity", "opacityOut"], ["size", "sizeOut"]]
     .forEach(([sliderId, outId]) => {
       const slider = el(sliderId);
       const out = el(outId);
@@ -586,6 +669,7 @@
         out.textContent = slider.value;
         updateSliderFill(slider);
         schedulePreview();
+        refreshModifiedTag();
       });
     });
 
@@ -595,6 +679,45 @@
       btn.classList.add("active");
       state.currentStyle = btn.dataset.style;
       schedulePreview();
+      refreshModifiedTag();
+    });
+  });
+
+  function currentMode() {
+    const activeBtn = document.querySelector("#patternToggle .icon-seg.active");
+    return activeBtn ? activeBtn.dataset.mode : "tiled";
+  }
+
+  function currentPosition() {
+    const activeBtn = document.querySelector("#positionGrid .pos-btn.active");
+    return activeBtn ? activeBtn.dataset.position : "center";
+  }
+
+  function setModeRows(mode) {
+    const tiledDisplay = mode === "tiled" ? "" : "none";
+    const singleDisplay = mode === "single" ? "" : "none";
+    el("columnsRow").style.display = tiledDisplay;
+    el("paddingRow").style.display = tiledDisplay;
+    el("positionRow").style.display = singleDisplay;
+    el("sizeRow").style.display = singleDisplay;
+  }
+
+  document.querySelectorAll("#patternToggle .icon-seg").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#patternToggle .icon-seg").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      setModeRows(btn.dataset.mode);
+      schedulePreview();
+      refreshModifiedTag();
+    });
+  });
+
+  document.querySelectorAll("#positionGrid .pos-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#positionGrid .pos-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      schedulePreview();
+      refreshModifiedTag();
     });
   });
 
@@ -604,14 +727,17 @@
       paddingRatio: parseInt(el("padding").value, 10) / 100,
       angleDeg: parseInt(el("angle").value, 10),
       opacity: parseInt(el("opacity").value, 10) / 100,
-      style: state.currentStyle
+      style: state.currentStyle,
+      mode: currentMode(),
+      size: parseInt(el("size").value, 10),
+      position: currentPosition()
     };
   }
 
   // ---------- Settings default (persisted) ----------
 
   const SETTINGS_DEFAULT_KEY = "wm_settings_default";
-  const BUILTIN_SETTINGS_DEFAULT = { columns: 3, padding: 15, angle: 45, opacity: 20, style: "light", output: "pdf" };
+  const BUILTIN_SETTINGS_DEFAULT = { columns: 3, padding: 10, angle: 45, opacity: 20, style: "light", output: "pdf", mode: "tiled", size: 40, position: "center" };
 
   function getSettingsDefault() {
     try {
@@ -629,12 +755,23 @@
     el("padding").value = defaults.padding; el("paddingOut").textContent = String(defaults.padding);
     el("angle").value = defaults.angle; el("angleOut").textContent = String(defaults.angle);
     el("opacity").value = defaults.opacity; el("opacityOut").textContent = String(defaults.opacity);
+    el("size").value = defaults.size; el("sizeOut").textContent = String(defaults.size);
     SETTINGS_SLIDER_IDS.forEach(id => updateSliderFill(el(id)));
+
     document.querySelectorAll("#styleToggle .icon-seg").forEach(b => b.classList.remove("active"));
     const styleBtn = document.querySelector(`#styleToggle .icon-seg[data-style="${defaults.style}"]`);
     (styleBtn || document.querySelector('#styleToggle .icon-seg[data-style="light"]')).classList.add("active");
     state.currentStyle = defaults.style;
     el("outputFormat").value = defaults.output;
+
+    document.querySelectorAll("#patternToggle .icon-seg").forEach(b => b.classList.remove("active"));
+    const modeBtn = document.querySelector(`#patternToggle .icon-seg[data-mode="${defaults.mode}"]`);
+    (modeBtn || document.querySelector('#patternToggle .icon-seg[data-mode="tiled"]')).classList.add("active");
+    setModeRows(defaults.mode);
+
+    document.querySelectorAll("#positionGrid .pos-btn").forEach(b => b.classList.remove("active"));
+    const posBtn = document.querySelector(`#positionGrid .pos-btn[data-position="${defaults.position}"]`);
+    (posBtn || document.querySelector('#positionGrid .pos-btn[data-position="center"]')).classList.add("active");
   }
 
   function saveCurrentSettingsAsDefault() {
@@ -644,16 +781,51 @@
       angle: parseInt(el("angle").value, 10),
       opacity: parseInt(el("opacity").value, 10),
       style: state.currentStyle,
-      output: el("outputFormat").value
+      output: el("outputFormat").value,
+      mode: currentMode(),
+      size: parseInt(el("size").value, 10),
+      position: currentPosition()
     };
     localStorage.setItem(SETTINGS_DEFAULT_KEY, JSON.stringify(toSave));
     setStatus("Default saved");
+    refreshModifiedTag();
   }
 
   el("setDefaultBtn").addEventListener("click", saveCurrentSettingsAsDefault);
 
   function resetSettings() {
     applySettingsToControls(getSettingsDefault());
+    refreshModifiedTag();
+  }
+
+  el("resetDefaultBtn").addEventListener("click", () => {
+    resetSettings();
+    schedulePreview();
+    setStatus("Default restored");
+  });
+
+  el("outputFormat").addEventListener("change", refreshModifiedTag);
+
+  // Compares the live settings controls against the saved/built-in default
+  // across every field, toggling the "Modified" tag and emphasizing Reset.
+  function refreshModifiedTag() {
+    const current = {
+      columns: parseInt(el("columns").value, 10),
+      padding: parseInt(el("padding").value, 10),
+      angle: parseInt(el("angle").value, 10),
+      opacity: parseInt(el("opacity").value, 10),
+      style: state.currentStyle,
+      output: el("outputFormat").value,
+      mode: currentMode(),
+      size: parseInt(el("size").value, 10),
+      position: currentPosition()
+    };
+    const saved = getSettingsDefault();
+    const isModified = Object.keys(current).some(key => String(current[key]) !== String(saved[key]));
+    const tag = el("modifiedTag");
+    const resetBtn = el("resetDefaultBtn");
+    tag.style.display = isModified ? "" : "none";
+    resetBtn.classList.toggle("emphasized", isModified);
   }
 
   function setStatus(msg) { el("statusLine").textContent = msg || ""; }
@@ -674,12 +846,20 @@
   // the canvases) apart from a template-selection change (rebuild the slide
   // list). This is what avoids the clear-then-refill collapse/jump.
   let previewOrderIds = [];
-  const previewSlideEls = new Map(); // tpl.id -> { slideEl, canvasEl }
+  const previewSlideEls = new Map(); // tpl.id -> { slideEl, canvasEl, pageCount }
 
-  // Renders the watermarked result for one template using the cached,
-  // already-decoded source canvas (no PDF/image re-decode).
-  async function renderSlideResult(tpl, text, settings) {
-    const srcCanvas = await getPreviewSourceCanvas(tpl);
+  // Current page (1-based) being shown per template id, for multi-page
+  // templates. Independent of previewOrderIds/dots: dots switch which
+  // template is shown, this tracks which page of that template is shown.
+  const previewPageIndex = new Map();
+  function getCurrentPage(tplId) {
+    return previewPageIndex.get(tplId) || 1;
+  }
+
+  // Renders the watermarked result for one template's page using the
+  // cached, already-decoded source canvas (no PDF/image re-decode).
+  async function renderSlideResult(tpl, text, settings, page) {
+    const srcCanvas = await getPreviewSourceCanvas(tpl, page);
     return Watermark.apply(srcCanvas, { text, ...settings });
   }
 
@@ -727,18 +907,24 @@
       slide.className = "preview-slide";
       slide.dataset.tplId = tpl.id;
       track.appendChild(slide);
+      const page = getCurrentPage(tpl.id);
       try {
-        const result = await renderSlideResult(tpl, text, settings);
+        const [result, pageCount] = await Promise.all([
+          renderSlideResult(tpl, text, settings, page),
+          getPageCount(tpl)
+        ]);
         const canvasEl = document.createElement("canvas");
         canvasEl.width = result.width;
         canvasEl.height = result.height;
         canvasEl.getContext("2d").drawImage(result, 0, 0);
         slide.appendChild(canvasEl);
-        previewSlideEls.set(tpl.id, { slideEl: slide, canvasEl });
+        const nav = buildPageNav(tpl, pageCount);
+        if (nav) slide.appendChild(nav);
+        previewSlideEls.set(tpl.id, { slideEl: slide, canvasEl, pageCount });
       } catch (err) {
         console.error(err);
         slide.textContent = "Preview error";
-        previewSlideEls.set(tpl.id, { slideEl: slide, canvasEl: null });
+        previewSlideEls.set(tpl.id, { slideEl: slide, canvasEl: null, pageCount: 1 });
       }
     }
 
@@ -753,8 +939,9 @@
     for (const tpl of selected) {
       const entry = previewSlideEls.get(tpl.id);
       if (!entry) continue; // shouldn't happen if selection signature matched
+      const page = getCurrentPage(tpl.id);
       try {
-        const result = await renderSlideResult(tpl, text, settings);
+        const result = await renderSlideResult(tpl, text, settings, page);
         if (entry.canvasEl) {
           paintCanvas(entry.canvasEl, result);
         } else {
@@ -803,6 +990,78 @@
     }
   }
 
+  // Repaints just one template's slide canvas at its current page — used by
+  // the page-nav chevrons so flipping a page doesn't touch other slides.
+  async function repaintSlidePage(tpl) {
+    const entry = previewSlideEls.get(tpl.id);
+    if (!entry || !entry.canvasEl) return;
+    const text = buildWatermarkText();
+    const settings = readSettings();
+    const page = getCurrentPage(tpl.id);
+    try {
+      const result = await renderSlideResult(tpl, text, settings, page);
+      paintCanvas(entry.canvasEl, result);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  // Overlaid page-flip controls for a multi-page template's slide: left/right
+  // chevrons plus a "Page X / N" pill. Returns null for single-page templates
+  // (no controls shown). Independent of the template dots below the preview,
+  // which switch which template is shown — these switch pages within one.
+  function buildPageNav(tpl, pageCount) {
+    if (pageCount <= 1) return null;
+
+    const nav = document.createElement("div");
+    nav.className = "page-nav";
+
+    const prevBtn = document.createElement("button");
+    prevBtn.type = "button";
+    prevBtn.className = "page-nav-btn page-nav-prev";
+    prevBtn.innerHTML = Icons.chevronLeft;
+    prevBtn.setAttribute("aria-label", "Previous page");
+
+    const nextBtn = document.createElement("button");
+    nextBtn.type = "button";
+    nextBtn.className = "page-nav-btn page-nav-next";
+    nextBtn.innerHTML = Icons.chevronRight;
+    nextBtn.setAttribute("aria-label", "Next page");
+
+    const counter = document.createElement("span");
+    counter.className = "page-counter";
+
+    function updateUI() {
+      const page = getCurrentPage(tpl.id);
+      counter.textContent = `Page ${page} / ${pageCount}`;
+      prevBtn.disabled = page <= 1;
+      nextBtn.disabled = page >= pageCount;
+    }
+    updateUI();
+
+    async function flip(delta) {
+      const cur = getCurrentPage(tpl.id);
+      const next = Math.min(pageCount, Math.max(1, cur + delta));
+      if (next === cur) return;
+      previewPageIndex.set(tpl.id, next);
+      updateUI();
+      await repaintSlidePage(tpl);
+    }
+
+    // Stop these taps/clicks from reaching the track-level long-press/mouse
+    // zoom handlers, which look at any click inside ".preview-slide".
+    [prevBtn, nextBtn].forEach((btn) => {
+      btn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    });
+    prevBtn.addEventListener("click", (e) => { e.stopPropagation(); flip(-1); });
+    nextBtn.addEventListener("click", (e) => { e.stopPropagation(); flip(1); });
+
+    nav.appendChild(prevBtn);
+    nav.appendChild(counter);
+    nav.appendChild(nextBtn);
+    return nav;
+  }
+
   // ---------- Long-press zoom on preview slides ----------
 
   let longPressTimer = null;
@@ -840,7 +1099,8 @@
     try {
       const text = buildWatermarkText();
       const settings = readSettings();
-      const hiCanvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 400);
+      const page = getCurrentPage(tpl.id);
+      const hiCanvas = await PdfHandler.loadAsCanvas(tpl.blob, tpl.type, 400, null, page);
       const hiResult = await Watermark.apply(hiCanvas, { text, ...settings });
       if (el("zoomOverlay").style.display !== "none") {
         img.src = hiResult.toDataURL("image/png");
@@ -851,14 +1111,19 @@
   }
 
   const previewTrackEl = el("previewTrack");
+  let lastPointerType = null;
+  let longPressFired = false;
 
   previewTrackEl.addEventListener("pointerdown", (e) => {
     const slide = e.target.closest(".preview-slide");
     if (!slide) return;
+    lastPointerType = e.pointerType;
+    longPressFired = false;
     longPressStart = { x: e.clientX, y: e.clientY };
     clearTimeout(longPressTimer);
     longPressTimer = setTimeout(() => {
       longPressTimer = null;
+      longPressFired = true;
       openZoom(slide);
     }, LONG_PRESS_MS);
   });
@@ -876,6 +1141,18 @@
       clearTimeout(longPressTimer);
       longPressTimer = null;
     });
+  });
+
+  // Mouse click/dblclick zoom trigger (pointer:fine devices). Long-press already
+  // opens zoom on a held mouse click via the pointerdown timer above; this handler
+  // only fires for a normal (short) click so the two paths don't double-trigger.
+  previewTrackEl.addEventListener("click", (e) => {
+    if (lastPointerType !== "mouse") return;
+    if (longPressFired) { longPressFired = false; return; }
+    if (!window.matchMedia || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    const slide = e.target.closest(".preview-slide");
+    if (!slide) return;
+    openZoom(slide);
   });
 
   el("zoomCloseBtn").addEventListener("click", closeZoom);
@@ -954,8 +1231,8 @@
     state.selectedTemplateIds.clear();
     state.lines = defaultLines();
     renderLines();
-    resetSettings();
     renderTemplatePicker();
+    previewPageIndex.clear();
     schedulePreview();
     setStatus("");
   });
@@ -1025,6 +1302,7 @@
   async function init() {
     renderAppVersion();
     applySettingsToControls(getSettingsDefault());
+    refreshModifiedTag();
     renderLines();
     await refreshTemplates();
     await loadCustomers();

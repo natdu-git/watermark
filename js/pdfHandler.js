@@ -2,14 +2,15 @@
 // a processed canvas back out as PDF or JPG.
 const PdfHandler = (() => {
 
-  // Render page 1 of a PDF blob (or an image blob) to an offscreen canvas.
+  // Render a page of a PDF blob (or an image blob) to an offscreen canvas.
+  // pageNumber (PDF branch only): 1-based page to render, defaults to page 1.
   // maxImageDim (image branch only): if set, clamps the longest edge of the
   // rendered canvas to this size (aspect-preserved) — used for cheap thumbnails.
-  async function loadAsCanvas(blob, type, targetDpi = 200, maxImageDim = null) {
+  async function loadAsCanvas(blob, type, targetDpi = 200, maxImageDim = null, pageNumber = 1) {
     if (type === "pdf") {
       const arrayBuffer = await blob.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const page = await pdf.getPage(1);
+      const page = await pdf.getPage(pageNumber);
       const scale = targetDpi / 72; // pdf.js viewport is at 72dpi base
       const viewport = page.getViewport({ scale });
 
@@ -38,6 +39,14 @@ const PdfHandler = (() => {
       ctx.drawImage(img, 0, 0, w, h);
       return canvas;
     }
+  }
+
+  // Page count for a template: real PDF page count via pdf.js, 1 for images.
+  async function getPageCount(blob, type) {
+    if (type !== "pdf") return 1;
+    const arrayBuffer = await blob.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    return pdf.numPages;
   }
 
   function blobToImage(blob) {
@@ -103,5 +112,5 @@ const PdfHandler = (() => {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
-  return { loadAsCanvas, canvasToBlob, overlayOnPdf, downloadBlob };
+  return { loadAsCanvas, canvasToBlob, overlayOnPdf, downloadBlob, getPageCount };
 })();
