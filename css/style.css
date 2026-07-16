@@ -511,7 +511,7 @@ input[type=range]::-moz-range-thumb {
   display: inline-flex;
   align-items: center;
 }
-.icon-seg.active { background: var(--text); color: #fff; }
+.icon-seg.active { background: var(--accent); color: #fff; }
 
 /* --- Setting Default block: Style / Output type rows, then the
    Setting-Default row with a Modified tag and Set-Default/Reset buttons. --- */
