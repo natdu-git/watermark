@@ -282,6 +282,7 @@ main {
   position: absolute;
   top: -6px;
   right: -6px;
+  z-index: 3; /* above thumb (1) and page-count badge (2) */
   background: var(--card-bg);
   color: var(--muted);
   border: 1px solid var(--border);
