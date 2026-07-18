@@ -10,9 +10,14 @@ const Watermark = (() => {
     dark:  { text: "rgba(240,240,240,1)", bg: "0,0,0", bgAlpha: 90 / 255, border: "rgba(200,200,200,1)" }
   };
 
-  async function ensureFontLoaded(size) {
+  // sampleText matters: subsetted webfonts (e.g. Google Fonts' Noto Sans Thai)
+  // only load the glyph ranges actually requested. Without passing the real
+  // watermark text, WebKit loads just the Latin subset — Thai glyphs then
+  // render with a fallback font whose metrics differ from what we measured,
+  // so text overflows/clips against the tile box (seen on iPhone).
+  async function ensureFontLoaded(size, sampleText) {
     try {
-      await document.fonts.load(`${size}px "${FONT_FAMILY}"`);
+      await document.fonts.load(`${size}px "${FONT_FAMILY}"`, sampleText || "ตัวอย่าง Sample 0123");
       await document.fonts.ready;
     } catch (e) { /* fall back silently to system font */ }
   }
@@ -21,11 +26,21 @@ const Watermark = (() => {
     return text.split("\n");
   }
 
+  // Uses actualBoundingBox metrics when available: Thai combining marks can
+  // paint wider than the advance width alone, which under-sizes the box.
+  function lineWidth(ctx, line) {
+    const m = ctx.measureText(line);
+    if (m.actualBoundingBoxLeft !== undefined && m.actualBoundingBoxRight !== undefined) {
+      return Math.max(m.width, m.actualBoundingBoxLeft + m.actualBoundingBoxRight);
+    }
+    return m.width;
+  }
+
   function measureMultiline(ctx, lines, font, lineSpacingRatio = 0.2) {
     ctx.font = font;
     let maxWidth = 0;
     for (const line of lines) {
-      const w = ctx.measureText(line).width;
+      const w = lineWidth(ctx, line);
       if (w > maxWidth) maxWidth = w;
     }
     const fontSize = parseInt(font, 10);
@@ -37,12 +52,14 @@ const Watermark = (() => {
   function drawMultilineCentered(ctx, lines, font, color, cx, cy, lineHeight) {
     ctx.font = font;
     ctx.fillStyle = color;
-    ctx.textAlign = "center";
+    ctx.textAlign = "left";
     ctx.textBaseline = "middle";
     const totalHeight = lineHeight * lines.length;
     let y = cy - totalHeight / 2 + lineHeight / 2;
     for (const line of lines) {
-      ctx.fillText(line, cx, y);
+      // Manual centering from measured width instead of textAlign:"center" —
+      // keeps measurement and placement on the exact same code path.
+      ctx.fillText(line, cx - lineWidth(ctx, line) / 2, y);
       y += lineHeight;
     }
   }
@@ -67,7 +84,7 @@ const Watermark = (() => {
 
     // Step 1: estimate font size against a placeholder string sized to columns.
     const testFontSize = 30;
-    await ensureFontLoaded(testFontSize);
+    await ensureFontLoaded(testFontSize, text);
     const lines = splitLines(text);
     const testLines = lines.map(l => {
       const idx = l.indexOf(":");
@@ -81,7 +98,7 @@ const Watermark = (() => {
     const fontSize = Math.max(8, Math.round(testFontSize * ratio));
 
     // Step 2: measure actual text at computed font size.
-    await ensureFontLoaded(fontSize);
+    await ensureFontLoaded(fontSize, text);
     const font = `${fontSize}px "${FONT_FAMILY}"`;
     const measure = measureMultiline(mctx, lines, font);
 
@@ -117,42 +134,37 @@ const Watermark = (() => {
 
     const { tileCanvas, boxWidth, boxHeight } = await buildTile(text, targetBoxWidth, style);
 
-    // Step 4: tile across a canvas big enough to cover the rotated bounds.
+    // Steps 4+5 combined: draw the tiles directly onto a page-sized canvas
+    // under a rotation transform, instead of building expanded intermediate
+    // canvases. The old approach created a tiling canvas of (W·cos+H·sin)²
+    // and a rotated canvas of roughly (W+H)·cos... bounds — at export
+    // resolution (300 DPI) those exceed iOS WebKit's ~16.7M-pixel canvas
+    // area limit, which silently blanks the canvas. That made iPhone output
+    // differ from the (lower-DPI) preview. Geometry here is identical: tile
+    // origin grid is centered on the page center, rotated by angleDeg.
     const angleRad = angleDeg * Math.PI / 180;
     const cosA = Math.abs(Math.cos(angleRad));
     const sinA = Math.abs(Math.sin(angleRad));
     const tilingW = Math.ceil(W * cosA + H * sinA);
     const tilingH = Math.ceil(H * cosA + W * sinA);
 
-    const tilingCanvas = document.createElement("canvas");
-    tilingCanvas.width = tilingW;
-    tilingCanvas.height = tilingH;
-    const tilCtx = tilingCanvas.getContext("2d");
-
     const uniformPadding = Math.round(boxWidth * paddingRatio);
     const stepX = boxWidth + uniformPadding;
     const stepY = boxHeight + uniformPadding;
 
-    for (let y = 0; y < tilingH; y += stepY) {
-      for (let x = 0; x < tilingW; x += stepX) {
-        tilCtx.drawImage(tileCanvas, x, y);
+    const rotatedCanvas = document.createElement("canvas");
+    rotatedCanvas.width = W;
+    rotatedCanvas.height = H;
+    const rotCtx = rotatedCanvas.getContext("2d");
+    rotCtx.translate(W / 2, H / 2);
+    rotCtx.rotate(angleRad);
+    for (let y = -tilingH / 2; y < tilingH / 2; y += stepY) {
+      for (let x = -tilingW / 2; x < tilingW / 2; x += stepX) {
+        rotCtx.drawImage(tileCanvas, x, y);
       }
     }
 
-    // Step 5: rotate the tiled canvas (expand-to-fit, like PIL's rotate(expand=True)).
-    const rotBoundW = Math.ceil(tilingW * cosA + tilingH * sinA);
-    const rotBoundH = Math.ceil(tilingH * cosA + tilingW * sinA);
-    const rotatedCanvas = document.createElement("canvas");
-    rotatedCanvas.width = rotBoundW;
-    rotatedCanvas.height = rotBoundH;
-    const rotCtx = rotatedCanvas.getContext("2d");
-    rotCtx.translate(rotBoundW / 2, rotBoundH / 2);
-    rotCtx.rotate(angleRad);
-    rotCtx.drawImage(tilingCanvas, -tilingW / 2, -tilingH / 2);
-
-    const pasteX = (W - rotBoundW) / 2;
-    const pasteY = (H - rotBoundH) / 2;
-    return { rotatedCanvas, pasteX, pasteY };
+    return { rotatedCanvas, pasteX: 0, pasteY: 0 };
   }
 
   // Anchor a w×h box within a W×H page at one of the 9 grid positions, with

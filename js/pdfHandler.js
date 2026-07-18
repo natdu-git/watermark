@@ -11,7 +11,13 @@ const PdfHandler = (() => {
       const arrayBuffer = await blob.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       const page = await pdf.getPage(pageNumber);
-      const scale = targetDpi / 72; // pdf.js viewport is at 72dpi base
+      let scale = targetDpi / 72; // pdf.js viewport is at 72dpi base
+      // Clamp render area to stay under iOS WebKit's ~16.7M-pixel canvas
+      // limit (with headroom); oversized canvases silently render blank there.
+      const MAX_CANVAS_AREA = 14000000;
+      const base = page.getViewport({ scale: 1 });
+      const area = base.width * base.height * scale * scale;
+      if (area > MAX_CANVAS_AREA) scale *= Math.sqrt(MAX_CANVAS_AREA / area);
       const viewport = page.getViewport({ scale });
 
       const canvas = document.createElement("canvas");
@@ -89,6 +95,13 @@ const PdfHandler = (() => {
     const RENDER_SCALE = 2; // ~144 DPI overlay render for crisp watermark text
 
     for (const page of pdfDoc.getPages()) {
+      // Pages stored with /Rotate (e.g. scanned landscape + rotate 270):
+      // pdf-lib drawImage ignores the rotation flag, so the overlay would be
+      // built and placed for the un-rotated orientation. Bail out to the
+      // raster path (pdf.js applies /Rotate correctly).
+      if ((page.getRotation().angle % 360) !== 0) {
+        throw new Error("Page has /Rotate — using raster fallback");
+      }
       const { width, height } = page.getSize();
       const W = Math.max(1, Math.round(width * RENDER_SCALE));
       const H = Math.max(1, Math.round(height * RENDER_SCALE));
